@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
 import { useAuth } from "../../context/AuthContext";
 import { useArea } from "../../context/AreaContext";
@@ -9,6 +10,7 @@ import ModalConfirmacion from "../../components/ModalConfirmacion";
 import Modal from "../../components/Modal";
 import EnvoltorioTabla from "../../components/EnvoltorioTabla";
 import Tabs from "../../components/Tabs";
+import ChipArea from "../../components/ChipArea";
 import type { Empleado, PagoCuota, RespuestaRpc } from "../../lib/tipos";
 
 /* ------------------------------------------------------------------ */
@@ -32,6 +34,7 @@ export default function Pagos() {
   const esSupervision = perfil?.rol === "supervision";
   const { areaIdsFiltro, areas } = useArea();
   const { mostrarToast } = useToast();
+  const [searchParams] = useSearchParams();
 
   const [desde, setDesde] = useState(fechaHoyInputCdmx());
   const [hasta, setHasta] = useState(fechaHoyInputCdmx());
@@ -61,6 +64,13 @@ export default function Pagos() {
     cargar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [desde, hasta, areaIdsFiltro]);
+
+  useEffect(() => {
+    const pestanaUrl = searchParams.get("pestana");
+    if (pestanaUrl === "revision" || pestanaUrl === "validados") {
+      setPestana(pestanaUrl);
+    }
+  }, [searchParams]);
 
   const enRevisionYPendientes = useMemo(
     () => pagos.filter((p) => p.estado === "pendiente" || p.estado === "marcado_pendiente_validacion"),
@@ -173,7 +183,7 @@ export default function Pagos() {
                     {enRevisionYPendientes.map((p) => (
                       <tr key={p.id}>
                         <td>{p.empleados ? nombreCompletoEmpleado(p.empleados) : "—"}</td>
-                        <td>{nombreArea(p.area_id)}</td>
+                        <td><ChipArea nombre={nombreArea(p.area_id)} /></td>
                         <td>{formatoFecha(p.fecha)}</td>
                         <td>{formatoMoneda(p.monto_esperado)}</td>
                         <td>
@@ -245,7 +255,7 @@ export default function Pagos() {
                     {validados.map((p) => (
                       <tr key={p.id}>
                         <td>{p.empleados ? nombreCompletoEmpleado(p.empleados) : "—"}</td>
-                        <td>{nombreArea(p.area_id)}</td>
+                        <td><ChipArea nombre={nombreArea(p.area_id)} /></td>
                         <td>{formatoFecha(p.fecha)}</td>
                         <td>{formatoMoneda(p.monto_esperado)}</td>
                         <td>{formatoFechaHora(p.validado_en)}</td>

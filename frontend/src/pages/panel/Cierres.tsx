@@ -7,6 +7,7 @@ import { llamarRpc } from "../../lib/rpc";
 import { formatoFecha, formatoMoneda, fechaHoyInputCdmx, ETIQUETAS_ESTADO_PAGO } from "../../lib/formato";
 import { descargarCsv, filaCsv, ENCABEZADOS_HISTORIAL } from "../../lib/csv";
 import EnvoltorioTabla from "../../components/EnvoltorioTabla";
+import ChipArea from "../../components/ChipArea";
 import Modal from "../../components/Modal";
 import type { CierrePeriodo, RespuestaRpc } from "../../lib/tipos";
 
@@ -86,6 +87,7 @@ export default function Cierres() {
     }
     const [desde, hasta] = [grupo[0].desde, grupo[0].hasta];
     descargarCsv(`cierre_periodo_${desde}_${hasta}.csv`, lineas);
+    mostrarToast("CSV descargado.", "exito");
   }
 
   return (
@@ -125,7 +127,11 @@ export default function Cierres() {
                   <td>
                     {formatoFecha(grupo[0].desde)} — {formatoFecha(grupo[0].hasta)}
                   </td>
-                  <td>{grupo.map((c) => nombreArea(c.area_id)).join(", ")}</td>
+                  <td className="celda-chips-area">
+                    {grupo.map((c) => (
+                      <ChipArea key={c.area_id} nombre={nombreArea(c.area_id)} />
+                    ))}
+                  </td>
                   <td>{formatoMoneda(esperado)}</td>
                   <td>{formatoMoneda(validado)}</td>
                   <td className="valor-kpi diferencia" style={{ fontSize: "1rem" }}>

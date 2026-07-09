@@ -6,6 +6,7 @@ import { useToast } from "../../context/ToastContext";
 import { llamarRpc } from "../../lib/rpc";
 import { fechaHoyInputCdmx, nombreCompletoEmpleado } from "../../lib/formato";
 import EnvoltorioTabla from "../../components/EnvoltorioTabla";
+import ChipArea from "../../components/ChipArea";
 import type { Empleado, HorarioDiario, RespuestaRpc } from "../../lib/tipos";
 
 export default function Horario() {
@@ -149,7 +150,7 @@ export default function Horario() {
                 )}
                 <td>{e.numero_empleado}</td>
                 <td>{nombreCompletoEmpleado(e)}</td>
-                <td>{areas.find((a) => a.id === e.area_id)?.nombre ?? "—"}</td>
+                <td><ChipArea nombre={areas.find((a) => a.id === e.area_id)?.nombre ?? "—"} /></td>
                 <td>{idsEnHorario.has(e.id) ? "Sí" : "No"}</td>
                 {!esSupervision && (
                   <td>

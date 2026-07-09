@@ -6,6 +6,8 @@ import { descargarCsv, filaCsv, nombreArchivoCsv } from "../../lib/csv";
 import EnvoltorioTabla from "../../components/EnvoltorioTabla";
 import Tabs from "../../components/Tabs";
 import Modal from "../../components/Modal";
+import ChipArea from "../../components/ChipArea";
+import { useToast } from "../../context/ToastContext";
 import { fechaHoyInputCdmx } from "../../lib/formato";
 import type { AsistenciaDiaria, PagoCuota } from "../../lib/tipos";
 import {
@@ -21,6 +23,7 @@ import {
 
 export default function Auditoria() {
   const { areaIdsFiltro, areas } = useArea();
+  const { mostrarToast } = useToast();
   const [pestana, setPestana] = useState("logs");
   const [logs, setLogs] = useState<LogAuditoria[]>([]);
   const [perfilesPorId, setPerfilesPorId] = useState<Map<string, PerfilAuditoria>>(new Map());
@@ -134,6 +137,7 @@ export default function Auditoria() {
     }
     const nombreAreaArchivo = areaIdsFiltro && areaIdsFiltro.length === 1 ? nombreArea(areaIdsFiltro[0]) : "ambas";
     descargarCsv(nombreArchivoCsv("auditoria_general", nombreAreaArchivo, desde, hasta), lineas);
+    mostrarToast("CSV descargado.", "exito");
   }
 
   function exportarEliminados() {
@@ -151,6 +155,7 @@ export default function Auditoria() {
     }
     const nombreAreaArchivo = areaIdsFiltro && areaIdsFiltro.length === 1 ? nombreArea(areaIdsFiltro[0]) : "ambas";
     descargarCsv(nombreArchivoCsv("auditoria_eliminados", nombreAreaArchivo, desde, hasta), lineas);
+    mostrarToast("CSV descargado.", "exito");
   }
 
   function exportarRevertidos() {
@@ -168,6 +173,7 @@ export default function Auditoria() {
     }
     const nombreAreaArchivo = areaIdsFiltro && areaIdsFiltro.length === 1 ? nombreArea(areaIdsFiltro[0]) : "ambas";
     descargarCsv(nombreArchivoCsv("auditoria_revertidos", nombreAreaArchivo, desde, hasta), lineas);
+    mostrarToast("CSV descargado.", "exito");
   }
 
   return (
@@ -283,7 +289,7 @@ export default function Auditoria() {
                   {eliminados.map((a) => (
                     <tr key={a.id}>
                       <td>{a.fecha}</td>
-                      <td>{nombreArea(a.area_id)}</td>
+                      <td><ChipArea nombre={nombreArea(a.area_id)} /></td>
                       <td>{a.empleados ? nombreCompletoEmpleado(a.empleados) : "—"}</td>
                       <td>{formatoFechaHora(a.eliminado_en)}</td>
                       <td>{a.motivo_eliminacion ?? "—"}</td>
@@ -324,7 +330,7 @@ export default function Auditoria() {
                   {revertidos.map((p) => (
                     <tr key={p.id}>
                       <td>{p.fecha}</td>
-                      <td>{nombreArea(p.area_id)}</td>
+                      <td><ChipArea nombre={nombreArea(p.area_id)} /></td>
                       <td>{p.empleados ? nombreCompletoEmpleado(p.empleados) : "—"}</td>
                       <td>{formatoMoneda(p.monto_esperado)}</td>
                       <td>{p.motivo_reversion ?? "—"}</td>

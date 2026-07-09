@@ -8,6 +8,7 @@ import { nombreCompletoEmpleado } from "../../lib/formato";
 import Modal from "../../components/Modal";
 import ModalConfirmacion from "../../components/ModalConfirmacion";
 import EnvoltorioTabla from "../../components/EnvoltorioTabla";
+import ChipArea from "../../components/ChipArea";
 import type { BuscarEmpleadoRespuesta, Empleado, EmpleadoOtraArea, PreferenciaNombre, RespuestaRpc } from "../../lib/tipos";
 
 interface FormularioEmpleado {
@@ -129,7 +130,7 @@ export default function Empleados() {
               <tr key={e.id}>
                 <td>{e.numero_empleado}</td>
                 <td>{nombreCompletoEmpleado(e)}</td>
-                <td>{nombreArea(e.area_id)}</td>
+                <td><ChipArea nombre={nombreArea(e.area_id)} /></td>
                 <td>
                   <span className={e.estado === "activo" ? "etiqueta etiqueta-exito" : "etiqueta etiqueta-neutral"}>
                     {e.estado === "activo" ? "Activo" : "Inactivo"}
@@ -181,7 +182,7 @@ export default function Empleados() {
                   <tr key={e.id}>
                     <td>{e.numero_empleado}</td>
                     <td>{nombreCompletoEmpleado(e)}</td>
-                    <td>{e.area_nombre}</td>
+                    <td><ChipArea nombre={e.area_nombre} /></td>
                     <td className="fila-acciones">
                       <button className="boton boton-chico boton-secundario" onClick={() => setSolicitarIngreso(e)}>
                         Solicitar a mi área

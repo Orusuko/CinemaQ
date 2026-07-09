@@ -7,6 +7,7 @@ import { llamarRpc } from "../../lib/rpc";
 import { formatoFechaHora } from "../../lib/formato";
 import ModalConfirmacion from "../../components/ModalConfirmacion";
 import EnvoltorioTabla from "../../components/EnvoltorioTabla";
+import ChipArea from "../../components/ChipArea";
 import type { SolicitudCambioArea } from "../../lib/tipos";
 
 const ETIQUETAS_ESTADO: Record<string, string> = {
@@ -76,8 +77,8 @@ export default function Solicitudes() {
                 <td>
                   {s.empleados ? `${s.empleados.numero_empleado} · ${s.empleados.primer_nombre} ${s.empleados.primer_apellido}` : "—"}
                 </td>
-                <td>{nombreArea(s.area_actual_id)}</td>
-                <td>{nombreArea(s.area_solicitada_id)}</td>
+                <td><ChipArea nombre={nombreArea(s.area_actual_id)} /></td>
+                <td><ChipArea nombre={nombreArea(s.area_solicitada_id)} /></td>
                 <td>{formatoFechaHora(s.creado_en)}</td>
                 <td>
                   <span

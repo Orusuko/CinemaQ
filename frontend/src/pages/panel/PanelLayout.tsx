@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { AreaProvider, useArea } from "../../context/AreaContext";
 import { supabase } from "../../lib/supabaseClient";
 import {
-  IconoInicio,
+  IconoGrafica,
   IconoCalendario,
   IconoLista,
   IconoBillete,
@@ -16,6 +16,7 @@ import {
   IconoSalir,
   IconoUsuario,
   IconoArchivo,
+  IconoMoneda,
   IconoMenu,
   IconoCerrar,
 } from "../../components/Iconos";
@@ -48,6 +49,15 @@ function SelectorArea() {
           </option>
         ))}
       </select>
+    </div>
+  );
+}
+
+function GrupoNav({ titulo, children }: { titulo: string; children: ReactNode }) {
+  return (
+    <div className="nav-grupo" role="group" aria-label={titulo}>
+      <div className="nav-grupo__titulo">{titulo}</div>
+      {children}
     </div>
   );
 }
@@ -139,50 +149,69 @@ function ContenidoPanel() {
           </button>
         </div>
         <div className="marca marca--escritorio">Cuotas Propinas</div>
-        <nav>
-          <NavLink to="/panel/dashboard" className={claseNav} onClick={cerrarMenu}>
-            <IconoInicio /> Balance
-          </NavLink>
-          <NavLink to="/panel/horario" className={claseNav} onClick={cerrarMenu}>
-            <IconoCalendario /> Horario
-          </NavLink>
-          <NavLink to="/panel/asistencia" className={claseNav} onClick={cerrarMenu}>
-            <IconoLista /> Asistencia
-          </NavLink>
-          <NavLink to="/panel/pagos" className={claseNav} onClick={cerrarMenu}>
-            <IconoBillete /> Pagos
-          </NavLink>
-          <NavLink to="/panel/empleados" className={claseNav} onClick={cerrarMenu}>
-            <IconoUsuarios /> Empleados
-          </NavLink>
-          <NavLink to="/panel/solicitudes" className={claseNav} onClick={cerrarMenu}>
-            <IconoIntercambio /> Solicitudes de área
-          </NavLink>
-          {esAdminGeneral && (
-            <NavLink to="/panel/usuarios" className={claseNav} onClick={cerrarMenu}>
-              <IconoEngranaje /> Usuarios
+        <nav aria-label="Menú principal">
+          <GrupoNav titulo="Operación diaria">
+            <NavLink to="/panel/dashboard" className={claseNav} onClick={cerrarMenu}>
+              <IconoGrafica /> Balance
             </NavLink>
-          )}
-          {esAdminGeneral && (
-            <NavLink to="/panel/cuotas" className={claseNav} onClick={cerrarMenu}>
-              <IconoBillete /> Cuotas
+            <NavLink to="/panel/horario" className={claseNav} onClick={cerrarMenu}>
+              <IconoCalendario /> Horario
             </NavLink>
-          )}
-          <NavLink to="/panel/cierres" className={claseNav} onClick={cerrarMenu}>
-            <IconoArchivo /> Cierres de periodo
-          </NavLink>
+            <NavLink to="/panel/asistencia" className={claseNav} onClick={cerrarMenu}>
+              <IconoLista /> Asistencia
+            </NavLink>
+            <NavLink to="/panel/pagos" className={claseNav} onClick={cerrarMenu}>
+              <IconoBillete /> Pagos
+            </NavLink>
+          </GrupoNav>
+
+          <GrupoNav titulo="Personal">
+            <NavLink to="/panel/empleados" className={claseNav} onClick={cerrarMenu}>
+              <IconoUsuarios /> Empleados
+            </NavLink>
+            <NavLink to="/panel/solicitudes" className={claseNav} onClick={cerrarMenu}>
+              <IconoIntercambio /> Solicitudes de área
+            </NavLink>
+          </GrupoNav>
+
           {(esAdminGeneral || esSupervision) && (
-            <NavLink to="/panel/auditoria" className={claseNav} onClick={cerrarMenu}>
-              <IconoEscudo /> Auditoría
-            </NavLink>
+            <GrupoNav titulo="Administración">
+              {esAdminGeneral && (
+                <NavLink to="/panel/usuarios" className={claseNav} onClick={cerrarMenu}>
+                  <IconoEngranaje /> Usuarios
+                </NavLink>
+              )}
+              {esAdminGeneral && (
+                <NavLink to="/panel/cuotas" className={claseNav} onClick={cerrarMenu}>
+                  <IconoMoneda /> Cuotas
+                </NavLink>
+              )}
+              <NavLink to="/panel/cierres" className={claseNav} onClick={cerrarMenu}>
+                <IconoArchivo /> Cierres de periodo
+              </NavLink>
+              <NavLink to="/panel/auditoria" className={claseNav} onClick={cerrarMenu}>
+                <IconoEscudo /> Auditoría
+              </NavLink>
+            </GrupoNav>
           )}
-          <NavLink to="/panel/notificaciones" className={claseNav} onClick={cerrarMenu}>
-            <IconoCampana /> Notificaciones
-            {noLeidas > 0 && <span className="badge-contador">{noLeidas}</span>}
-          </NavLink>
-          <NavLink to="/panel/cuenta" className={claseNav} onClick={cerrarMenu}>
-            <IconoUsuario /> Mi cuenta
-          </NavLink>
+
+          {!esAdminGeneral && !esSupervision && (
+            <GrupoNav titulo="Administración">
+              <NavLink to="/panel/cierres" className={claseNav} onClick={cerrarMenu}>
+                <IconoArchivo /> Cierres de periodo
+              </NavLink>
+            </GrupoNav>
+          )}
+
+          <GrupoNav titulo="Cuenta">
+            <NavLink to="/panel/notificaciones" className={claseNav} onClick={cerrarMenu}>
+              <IconoCampana /> Notificaciones
+              {noLeidas > 0 && <span className="badge-contador">{noLeidas}</span>}
+            </NavLink>
+            <NavLink to="/panel/cuenta" className={claseNav} onClick={cerrarMenu}>
+              <IconoUsuario /> Mi cuenta
+            </NavLink>
+          </GrupoNav>
         </nav>
         <div className="pie-barra-lateral">
           <button type="button" className="enlace-nav" onClick={salir}>

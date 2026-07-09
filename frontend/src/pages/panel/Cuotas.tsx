@@ -5,6 +5,7 @@ import { useToast } from "../../context/ToastContext";
 import { llamarRpc } from "../../lib/rpc";
 import { formatoFecha, formatoMoneda, fechaHoyInputCdmx } from "../../lib/formato";
 import EnvoltorioTabla from "../../components/EnvoltorioTabla";
+import ChipArea from "../../components/ChipArea";
 import type { HistorialCuota, RespuestaRpc } from "../../lib/tipos";
 
 export default function Cuotas() {
@@ -104,7 +105,7 @@ export default function Cuotas() {
           <tbody>
             {historial.map((h) => (
               <tr key={h.id}>
-                <td>{areas.find((a) => a.id === h.area_id)?.nombre ?? "—"}</td>
+                <td><ChipArea nombre={areas.find((a) => a.id === h.area_id)?.nombre ?? "—"} /></td>
                 <td>{formatoMoneda(h.monto)}</td>
                 <td>{formatoFecha(h.vigente_desde)}</td>
                 <td>{h.vigente_hasta ? formatoFecha(h.vigente_hasta) : "Vigente"}</td>

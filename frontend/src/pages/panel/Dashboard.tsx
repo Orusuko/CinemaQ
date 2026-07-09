@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
+import { useAuth } from "../../context/AuthContext";
 import { useArea } from "../../context/AreaContext";
 import { formatoFecha, formatoMoneda, ETIQUETAS_ESTADO_PAGO, claseEstadoPago, nombreCompletoEmpleado } from "../../lib/formato";
 import { calcularRango, type PeriodoBalance } from "../../lib/rangosFecha";
@@ -8,6 +9,8 @@ import { fechaHoyInputCdmx } from "../../lib/formato";
 import { descargarCsv, filaCsv, ENCABEZADOS_HISTORIAL, nombreArchivoCsv } from "../../lib/csv";
 import EnvoltorioTabla from "../../components/EnvoltorioTabla";
 import Tabs from "../../components/Tabs";
+import ChipArea from "../../components/ChipArea";
+import { useToast } from "../../context/ToastContext";
 import type { PagoCuota } from "../../lib/tipos";
 
 /* ------------------------------------------------------------------ */
@@ -36,7 +39,10 @@ function SkeletonTabla({ filas = 4 }: { filas?: number }) {
 /* Componente principal                                                */
 /* ------------------------------------------------------------------ */
 export default function Dashboard() {
+  const { perfil } = useAuth();
+  const esSupervision = perfil?.rol === "supervision";
   const { areas, areaIdsFiltro, cargando: cargandoAreas } = useArea();
+  const { mostrarToast } = useToast();
   const [periodo, setPeriodo] = useState<PeriodoBalance>("dia");
   const [rangoManual, setRangoManual] = useState({ desde: fechaHoyInputCdmx(), hasta: fechaHoyInputCdmx() });
   const [pagos, setPagos] = useState<PagoCuota[]>([]);
@@ -110,6 +116,7 @@ export default function Dashboard() {
     }
     const nombreAreaArchivo = areaIdsFiltro && areaIdsFiltro.length === 1 ? nombreArea(areaIdsFiltro[0]) : "ambas";
     descargarCsv(nombreArchivoCsv("balance", nombreAreaArchivo, rango.desde, rango.hasta), lineas);
+    mostrarToast("CSV descargado.", "exito");
   }
 
   const claseDiferencia = totales.diferencia === 0 ? "diferencia-cero" : "diferencia";
@@ -128,6 +135,8 @@ export default function Dashboard() {
   })();
 
   const subtituloPeriodo = `${ETIQUETAS_PERIODO[periodo]} · ${etiquetaArea}`;
+
+  const pctRecaudado = totales.esperado > 0 ? Math.min(100, Math.round((totales.recaudado / totales.esperado) * 100)) : 0;
 
   const pestanasConfig = [
     { id: "pendientes", etiqueta: "Pendientes por cobrar", contador: pendientes.length },
@@ -188,11 +197,11 @@ export default function Dashboard() {
       ) : (
         <div className="rejilla-kpi">
           <div className="tarjeta tarjeta-kpi">
-            <div className="etiqueta-kpi">Esperado (debes tener)</div>
+            <div className="etiqueta-kpi">Total a recaudar</div>
             <div className="valor-kpi">{formatoMoneda(totales.esperado)}</div>
           </div>
           <div className="tarjeta tarjeta-kpi">
-            <div className="etiqueta-kpi">Recaudado (validado)</div>
+            <div className="etiqueta-kpi">Validado en caja</div>
             <div className="valor-kpi">{formatoMoneda(totales.recaudado)}</div>
           </div>
           <div className="tarjeta tarjeta-kpi">
@@ -205,10 +214,27 @@ export default function Dashboard() {
               {formatoMoneda(totales.enRevision)}
             </div>
             {totales.enRevision > 0 && (
-              <div className="subvalor">
-                Pendiente de validación administrativa
-              </div>
+              <>
+                <div className="subvalor">
+                  Pendiente de validación administrativa
+                </div>
+                <Link to="/panel/pagos?pestana=revision" className="enlace-accion" style={{ marginTop: "0.5rem" }}>
+                  Revisar en Pagos →
+                </Link>
+              </>
             )}
+          </div>
+        </div>
+      )}
+
+      {!cargando && totales.esperado > 0 && (
+        <div className="barra-progreso-recaudo tarjeta">
+          <div className="barra-progreso-recaudo__cabecera">
+            <span className="texto-suave">Avance del periodo</span>
+            <strong>{pctRecaudado}% recaudado</strong>
+          </div>
+          <div className="barra-progreso-recaudo__pista" role="progressbar" aria-valuenow={pctRecaudado} aria-valuemin={0} aria-valuemax={100}>
+            <div className="barra-progreso-recaudo__relleno" style={{ width: `${pctRecaudado}%` }} />
           </div>
         </div>
       )}
@@ -224,7 +250,7 @@ export default function Dashboard() {
                 <span className="icono-vacio">✅</span>
                 <p>No hay pagos pendientes en este periodo.</p>
                 <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
-                  <Link to="/panel/pagos" className="enlace-accion">
+                  <Link to="/panel/pagos?pestana=revision" className="enlace-accion">
                     Ir a Pagos →
                   </Link>
                   <Link to="/panel/horario" className="enlace-accion">
@@ -242,18 +268,24 @@ export default function Dashboard() {
                       <th>Fecha</th>
                       <th>Estado</th>
                       <th>Monto</th>
+                      <th>Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
                     {pendientes.map((p) => (
                       <tr key={p.id}>
                         <td>{p.empleados ? nombreCompletoEmpleado(p.empleados) : "—"}</td>
-                        <td>{nombreArea(p.area_id)}</td>
+                        <td><ChipArea nombre={nombreArea(p.area_id)} /></td>
                         <td>{formatoFecha(p.fecha)}</td>
                         <td>
                           <span className={claseEstadoPago(p.estado)}>{ETIQUETAS_ESTADO_PAGO[p.estado]}</span>
                         </td>
                         <td>{formatoMoneda(p.monto_esperado)}</td>
+                        <td>
+                          <Link to="/panel/pagos?pestana=revision" className="enlace-accion">
+                            {esSupervision ? "Ver en Pagos →" : "Validar →"}
+                          </Link>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -288,7 +320,7 @@ export default function Dashboard() {
                     {pagos.map((p) => (
                       <tr key={p.id}>
                         <td>{p.empleados ? nombreCompletoEmpleado(p.empleados) : "—"}</td>
-                        <td>{nombreArea(p.area_id)}</td>
+                        <td><ChipArea nombre={nombreArea(p.area_id)} /></td>
                         <td>{formatoFecha(p.fecha)}</td>
                         <td>
                           <span className={claseEstadoPago(p.estado)}>{ETIQUETAS_ESTADO_PAGO[p.estado]}</span>

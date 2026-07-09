@@ -246,6 +246,20 @@ button {
   color: #fff;
 }
 
+.nav-grupo {
+  margin-bottom: 0.85rem;
+}
+
+.nav-grupo__titulo {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #64748b;
+  padding: 0.35rem 0.7rem 0.25rem;
+  user-select: none;
+}
+
 .pie-barra-lateral {
   border-top: 1px solid rgba(255, 255, 255, 0.12);
   padding-top: 0.8rem;
@@ -691,8 +705,28 @@ table.tabla-datos tbody tr:hover {
 }
 
 .checkbox-fila {
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
+  /* Touch target ≥44px via clickable area */
+  position: relative;
+  cursor: pointer;
+}
+
+.checkbox-fila::before {
+  content: "";
+  position: absolute;
+  inset: -11px;
+  /* Expandir zona táctil a ~44px sin cambiar visual */
+}
+
+.boton-chico {
+  padding: 0.35rem 0.7rem;
+  font-size: 0.85rem;
+  min-height: 44px;
+}
+
+.enlace-nav {
+  min-height: 44px;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -865,6 +899,66 @@ table.tabla-datos tbody tr:hover {
 
 .boton-rechazar:hover:not(:disabled) {
   background: #fde68a;
+}
+
+/* Chips de área */
+.chip-area {
+  display: inline-block;
+  padding: 0.18rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.chip-area--comanderos {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.chip-area--corredores {
+  background: #ffedd5;
+  color: #c2410c;
+}
+
+.chip-area--neutral {
+  background: var(--color-neutral-fondo);
+  color: var(--color-neutral-texto);
+}
+
+.celda-chips-area {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+/* Barra progreso recaudo (Dashboard) */
+.barra-progreso-recaudo {
+  margin-bottom: 1.2rem;
+  padding: 1rem 1.2rem;
+}
+
+.barra-progreso-recaudo__cabecera {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.55rem;
+  font-size: 0.88rem;
+}
+
+.barra-progreso-recaudo__pista {
+  height: 10px;
+  background: var(--color-neutral-fondo);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.barra-progreso-recaudo__relleno {
+  height: 100%;
+  background: linear-gradient(90deg, var(--color-primario), var(--color-exito));
+  border-radius: 999px;
+  transition: width 0.35s ease;
 }
 
 /* Sticky guardar en móvil */

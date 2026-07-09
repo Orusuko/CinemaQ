@@ -5,6 +5,7 @@ import { useToast } from "../../context/ToastContext";
 import { llamarEdgeFunction } from "../../lib/edgeFunctions";
 import Modal from "../../components/Modal";
 import EnvoltorioTabla from "../../components/EnvoltorioTabla";
+import ChipArea from "../../components/ChipArea";
 import type { Perfil, RolPerfil } from "../../lib/tipos";
 
 const ETIQUETAS_ROL: Record<RolPerfil, string> = {
@@ -74,7 +75,7 @@ export default function Usuarios() {
                 <td><code>{u.nombre_usuario}</code></td>
                 <td>{u.nombre_completo}</td>
                 <td>{ETIQUETAS_ROL[u.rol]}</td>
-                <td>{nombreArea(u.area_id)}</td>
+                <td><ChipArea nombre={nombreArea(u.area_id)} /></td>
                 <td>
                   <span className={u.activo ? "etiqueta etiqueta-exito" : "etiqueta etiqueta-neutral"}>
                     {u.activo ? "Activo" : "Inactivo"}

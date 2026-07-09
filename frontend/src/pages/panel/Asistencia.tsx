@@ -7,6 +7,7 @@ import { llamarRpc } from "../../lib/rpc";
 import { fechaHoyInputCdmx, nombreCompletoEmpleado } from "../../lib/formato";
 import ModalConfirmacion from "../../components/ModalConfirmacion";
 import EnvoltorioTabla from "../../components/EnvoltorioTabla";
+import ChipArea from "../../components/ChipArea";
 import type { AsistenciaDiaria, Empleado, EstadoPago, RespuestaRpc } from "../../lib/tipos";
 
 export default function Asistencia() {
@@ -161,7 +162,7 @@ export default function Asistencia() {
               <tr key={a.id}>
                 <td>{a.empleados?.numero_empleado}</td>
                 <td>{a.empleados ? nombreCompletoEmpleado(a.empleados) : "—"}</td>
-                <td>{areas.find((ar) => ar.id === a.area_id)?.nombre ?? "—"}</td>
+                <td><ChipArea nombre={areas.find((ar) => ar.id === a.area_id)?.nombre ?? "—"} /></td>
                 <td>{estadosPago[a.empleado_id] ?? "—"}</td>
                 {!esSupervision && (
                   <td>

@@ -69,3 +69,10 @@ export function claseEstadoPago(estado: EstadoPago): string {
       return "etiqueta etiqueta-pendiente";
   }
 }
+
+export function claseChipArea(nombre: string): string {
+  const n = nombre.toLowerCase();
+  if (n.includes("comand")) return "chip-area chip-area--comanderos";
+  if (n.includes("corred")) return "chip-area chip-area--corredores";
+  return "chip-area chip-area--neutral";
+}
