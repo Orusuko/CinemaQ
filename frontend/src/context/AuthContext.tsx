@@ -77,14 +77,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (msg.includes("invalid login credentials") || msg.includes("invalid_credentials")) {
         return {
           error:
-            "Usuario o contraseña incorrectos. Si solo insertaste en perfiles, ejecuta supabase/seed/crear_usuario_orusuko.sql completo (crea auth.users + identities).",
+            "Usuario o contraseña incorrectos. Verifica las credenciales o contacta al administrador del sistema.",
         };
       }
       if (msg.includes("invalid api key") || msg.includes("apikey")) {
         return { error: "La anon key en frontend/.env no es válida. Cópiala de Supabase → Settings → API." };
       }
       if (msg.includes("email not confirmed")) {
-        return { error: "El usuario existe pero el correo interno no está confirmado. Vuelve a ejecutar crear_usuario_orusuko.sql." };
+        return { error: "El usuario existe pero el correo interno no está confirmado. Contacta al administrador del sistema." };
       }
       return { error: `No se pudo iniciar sesión: ${error.message}` };
     }

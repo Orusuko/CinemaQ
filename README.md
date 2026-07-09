@@ -19,8 +19,6 @@ reforzada y exportación CSV.
 .
 ├── frontend/                     App React + Vite (se compila a sitio estático)
 ├── supabase/
-│   ├── esquema_completo.sql      Todo el SQL en un solo archivo
-│   ├── segmentos/                Mismo SQL dividido en 10 partes (ver LEEME.md)
 │   └── functions/                Edge Functions (Deno) para gestión de usuarios admin
 │       ├── _shared/                Helpers compartidos (CORS, verificación de rol)
 │       ├── create-admin-user/
@@ -41,25 +39,23 @@ reforzada y exportación CSV.
    explícitamente esa zona horaria en las funciones SQL, independientemente
    de esta configuración — es una capa adicional de consistencia).
 
-### 2.2 Ejecutar el esquema (un solo SQL)
+### 2.2 Base de datos en la nube
 
-1. En Supabase → **Authentication → Providers → Email**, pon **Minimum password
-   length** en **4** (para la contraseña de prueba `1234`).
-2. Abre **SQL Editor → New query**.
-3. Pega el SQL de una de estas opciones:
-   - **Todo de una vez:** [`supabase/esquema_completo.sql`](supabase/esquema_completo.sql)
-   - **Por partes (recomendado si hay errores):** carpeta [`supabase/segmentos/`](supabase/segmentos/) — ejecuta `01` … `10` en orden (ver [`LEEME.md`](supabase/segmentos/LEEME.md)).
-4. **Run**. Incluye extensiones, tablas, funciones, triggers, RPC, RLS, áreas,
-   pg_cron y el usuario **Orusuko / 1234** (administrador_general).
+El esquema (tablas, funciones RPC, triggers, RLS, seeds) ya está desplegado en
+el proyecto Supabase en la nube. Este repositorio **no** incluye archivos SQL
+locales: los cambios de esquema se aplican directamente en el **SQL Editor** del
+Dashboard de Supabase.
 
-Es idempotente: puedes volver a ejecutarlo si algo falló a medias.
+En **Authentication → Providers → Email**, la longitud mínima de contraseña debe
+ser **4** (para la contraseña de prueba `1234`).
 
-> **Si tu plan no soporta `pg_cron`:** comenta `create extension if not exists "pg_cron"`
-> y el bloque `cron.schedule` al final del archivo.
+> **Si necesitas recrear el esquema:** hazlo desde el SQL Editor del proyecto en
+> Supabase o exporta un dump desde el Dashboard. No hay migraciones versionadas
+> en este repo.
 
 ### 2.3 Credenciales de prueba
 
-Tras ejecutar `esquema_completo.sql`:
+En el proyecto Supabase configurado:
 
 | Campo | Valor |
 |-------|-------|
@@ -140,17 +136,17 @@ no es la deseada, es fácil de ajustar (se señala dónde en cada caso):
 | # | Decisión | Dónde ajustar |
 |---|----------|----------------|
 | 1 | "Tiempo real" en balance = recalcular al cargar la pantalla o después de "Guardar cambios". **No** se usa Supabase Realtime en este MVP. | `Dashboard.tsx` (agregar suscripción Realtime si se desea) |
-| 2 | El balance de la **página pública** muestra solo el **agregado del día actual por área** (esperado/recaudado/en revisión), sin desglose por empleado. | `balance_publico_hoy()` en `0005_rpc_publico.sql` + `PaginaPublica.tsx` |
-| 3 | `cierres_periodo.detalle` guarda un **snapshot jsonb** del desglose por empleado en el momento del cierre. Las descargas posteriores del CSV usan ese snapshot, **no** recalculan contra `pagos_cuota` (que puede seguir cambiando después del cierre). | `cerrar_periodo()` en `0006_rpc_admin.sql` |
-| 4 | `cerrar_periodo()` siempre inserta **2 filas** (una por área), aunque los totales sean $0.00. | `0006_rpc_admin.sql` |
-| 5 | Colisión de identificador público (4 primeros dígitos repetidos entre empleados activos): se amplía automáticamente a 5 dígitos para ese subconjunto. | `listar_empleados_publicos()` en `0005_rpc_publico.sql` |
+| 2 | El balance de la **página pública** muestra solo el **agregado del día actual por área** (esperado/recaudado/en revisión), sin desglose por empleado. | RPC `balance_publico_hoy()` + `PaginaPublica.tsx` |
+| 3 | `cierres_periodo.detalle` guarda un **snapshot jsonb** del desglose por empleado en el momento del cierre. Las descargas posteriores del CSV usan ese snapshot, **no** recalculan contra `pagos_cuota` (que puede seguir cambiando después del cierre). | RPC `cerrar_periodo()` |
+| 4 | `cerrar_periodo()` siempre inserta **2 filas** (una por área), aunque los totales sean $0.00. | RPC `cerrar_periodo()` |
+| 5 | Colisión de identificador público (4 primeros dígitos repetidos entre empleados activos): se amplía automáticamente a 5 dígitos para ese subconjunto. | RPC `listar_empleados_publicos()` |
 | 6 | Nombres de archivo CSV usan guiones bajos consistentes: `tipo_area_desde_hasta.csv`. | `src/lib/csv.ts` |
-| 7 | El admin_area puede **validar directamente** un pago `pendiente` (sin esperar a que el empleado marque), no solo pagos `marcado_pendiente_validacion`. Esto cubre el "flujo alterno" descrito en la especificación original. | `validar_pago()` en `0006_rpc_admin.sql` |
-| 8 | Al **rechazar** un pago en revisión, se limpia `marcado_por_empleado`/`marcado_empleado_en` para que el empleado pueda volver a marcar. | `rechazar_pago()` en `0006_rpc_admin.sql` |
-| 9 | Al **revertir una validación**, también se limpian las banderas de marcado del empleado (vuelve a un estado "limpio" de pendiente). | `revertir_validacion()` en `0006_rpc_admin.sql` |
-| 10 | Al **revertir la eliminación** de una asistencia, el pago vinculado regresa a `pendiente` (nunca directo a `validado`): re-acreditar dinero automáticamente saltaría el filtro humano de doble verificación. | `revertir_eliminacion_asistencia()` en `0006_rpc_admin.sql` |
-| 11 | `registrar_pago_manual` solo aplica cuando **no existe** una obligación de pago para ese día (o esta fue cancelada). Si ya existe una fila `pendiente`/`en revisión`/`validado`, se rechaza sugiriendo usar "validar" o "revertir" en su lugar. | `registrar_pago_manual()` en `0006_rpc_admin.sql` |
-| 12 | pg_cron programado a las **13:00 UTC** para `revisar_pagos_estancados()`. | Final de `esquema_completo.sql` |
+| 7 | El admin_area puede **validar directamente** un pago `pendiente` (sin esperar a que el empleado marque), no solo pagos `marcado_pendiente_validacion`. Esto cubre el "flujo alterno" descrito en la especificación original. | RPC `validar_pago()` |
+| 8 | Al **rechazar** un pago en revisión, se limpia `marcado_por_empleado`/`marcado_empleado_en` para que el empleado pueda volver a marcar. | RPC `rechazar_pago()` |
+| 9 | Al **revertir una validación**, también se limpian las banderas de marcado del empleado (vuelve a un estado "limpio" de pendiente). | RPC `revertir_validacion()` |
+| 10 | Al **revertir la eliminación** de una asistencia, el pago vinculado regresa a `pendiente` (nunca directo a `validado`): re-acreditar dinero automáticamente saltaría el filtro humano de doble verificación. | RPC `revertir_eliminacion_asistencia()` |
+| 11 | `registrar_pago_manual` solo aplica cuando **no existe** una obligación de pago para ese día (o esta fue cancelada). Si ya existe una fila `pendiente`/`en revisión`/`validado`, se rechaza sugiriendo usar "validar" o "revertir" en su lugar. | RPC `registrar_pago_manual()` |
+| 12 | pg_cron programado a las **13:00 UTC** para `revisar_pagos_estancados()`. | Job en Supabase (pg_cron) |
 | 13 | La ventana horaria del empleado (23:30 CDMX) se valida **únicamente en el servidor** dentro de `marcar_pago_empleado()`; el frontend no deshabilita el botón preventivamente por hora, solo muestra el mensaje de error que devuelve el servidor si ya cerró. | `marcar_pago_empleado()` + `PaginaPublica.tsx` |
 
 ---
@@ -159,7 +155,7 @@ no es la deseada, es fácil de ajustar (se señala dónde en cada caso):
 
 Antes de dar por buena una instalación en producción, verifica:
 
-- [ ] `ENABLE ROW LEVEL SECURITY` está activo en **todas** las tablas de negocio (lo hace `0007_rls.sql`; puedes confirmarlo en el Dashboard → Table Editor → cada tabla).
+- [ ] `ENABLE ROW LEVEL SECURITY` está activo en **todas** las tablas de negocio (confírmalo en el Dashboard → Table Editor → cada tabla).
 - [ ] El rol `anon` **no** tiene acceso directo de lectura/escritura a ninguna tabla (solo `EXECUTE` en `marcar_pago_empleado`, `listar_empleados_publicos`, `balance_publico_hoy`).
 - [ ] La llave `service_role` **no** aparece en ningún archivo del repositorio ni en `frontend/`.
 - [ ] Las variables `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` están configuradas como GitHub Secrets, no hardcodeadas.

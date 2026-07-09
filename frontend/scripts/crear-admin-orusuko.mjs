@@ -101,7 +101,7 @@ const { error: perfilError } = await admin.from("perfiles").upsert(
 if (perfilError) {
   console.error("No se pudo crear/actualizar perfil:", perfilError.message);
   console.error(
-    "¿Ejecutaste 0009_login_por_usuario.sql (o 00_esquema_completo.sql actualizado)?",
+    "¿La tabla public.perfiles existe en Supabase y tienes permisos con la service_role key?",
   );
   process.exit(1);
 }
