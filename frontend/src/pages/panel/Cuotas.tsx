@@ -4,6 +4,7 @@ import { useArea } from "../../context/AreaContext";
 import { useToast } from "../../context/ToastContext";
 import { llamarRpc } from "../../lib/rpc";
 import { formatoFecha, formatoMoneda, fechaHoyInputCdmx } from "../../lib/formato";
+import { mensajeErrorConsulta } from "../../lib/consulta";
 import EnvoltorioTabla from "../../components/EnvoltorioTabla";
 import ChipArea from "../../components/ChipArea";
 import type { HistorialCuota, RespuestaRpc } from "../../lib/tipos";
@@ -17,8 +18,13 @@ export default function Cuotas() {
 
   async function cargar() {
     setCargando(true);
-    const { data } = await supabase.from("historial_cuotas").select("*").order("vigente_desde", { ascending: false });
-    setHistorial((data as HistorialCuota[]) ?? []);
+    const { data, error } = await supabase.from("historial_cuotas").select("*").order("vigente_desde", { ascending: false });
+    if (error) {
+      mostrarToast(mensajeErrorConsulta(error, "No se pudo cargar el historial de cuotas."), "error");
+      setHistorial([]);
+    } else {
+      setHistorial((data as HistorialCuota[]) ?? []);
+    }
     setCargando(false);
   }
 

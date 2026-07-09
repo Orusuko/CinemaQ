@@ -6,6 +6,7 @@ import { useToast } from "../../context/ToastContext";
 import { llamarRpc } from "../../lib/rpc";
 import { formatoFecha, formatoMoneda, fechaHoyInputCdmx, ETIQUETAS_ESTADO_PAGO } from "../../lib/formato";
 import { descargarCsv, filaCsv, ENCABEZADOS_HISTORIAL } from "../../lib/csv";
+import { mensajeErrorConsulta } from "../../lib/consulta";
 import EnvoltorioTabla from "../../components/EnvoltorioTabla";
 import ChipArea from "../../components/ChipArea";
 import Modal from "../../components/Modal";
@@ -23,8 +24,13 @@ export default function Cierres() {
 
   async function cargar() {
     setCargando(true);
-    const { data } = await supabase.from("cierres_periodo").select("*").order("cerrado_en", { ascending: false });
-    setCierres((data as CierrePeriodo[]) ?? []);
+    const { data, error } = await supabase.from("cierres_periodo").select("*").order("cerrado_en", { ascending: false });
+    if (error) {
+      mostrarToast(mensajeErrorConsulta(error, "No se pudieron cargar los cierres."), "error");
+      setCierres([]);
+    } else {
+      setCierres((data as CierrePeriodo[]) ?? []);
+    }
     setCargando(false);
   }
 
@@ -48,6 +54,7 @@ export default function Cierres() {
   }
 
   function descargarGrupo(grupo: CierrePeriodo[]) {
+    if (grupo.length === 0) return;
     const lineas: string[] = [];
     for (const cierre of grupo) {
       lineas.push(`ÁREA: ${nombreArea(cierre.area_id).toUpperCase()}`);
@@ -86,8 +93,8 @@ export default function Cierres() {
       lineas.push("");
     }
     const [desde, hasta] = [grupo[0].desde, grupo[0].hasta];
-    descargarCsv(`cierre_periodo_${desde}_${hasta}.csv`, lineas);
-    mostrarToast("CSV descargado.", "exito");
+    const ok = descargarCsv(`cierre_periodo_${desde}_${hasta}.csv`, lineas);
+    mostrarToast(ok ? "CSV descargado." : "No se pudo descargar el CSV.", ok ? "exito" : "error");
   }
 
   return (
@@ -129,7 +136,7 @@ export default function Cierres() {
                   </td>
                   <td className="celda-chips-area">
                     {grupo.map((c) => (
-                      <ChipArea key={c.area_id} nombre={nombreArea(c.area_id)} />
+                      <ChipArea key={c.id} nombre={nombreArea(c.area_id)} />
                     ))}
                   </td>
                   <td>{formatoMoneda(esperado)}</td>

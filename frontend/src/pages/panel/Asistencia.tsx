@@ -5,6 +5,7 @@ import { useArea } from "../../context/AreaContext";
 import { useToast } from "../../context/ToastContext";
 import { llamarRpc } from "../../lib/rpc";
 import { fechaHoyInputCdmx, nombreCompletoEmpleado } from "../../lib/formato";
+import { mensajeErrorConsulta } from "../../lib/consulta";
 import ModalConfirmacion from "../../components/ModalConfirmacion";
 import EnvoltorioTabla from "../../components/EnvoltorioTabla";
 import ChipArea from "../../components/ChipArea";
@@ -47,19 +48,22 @@ export default function Asistencia() {
     let consultaEmpleados = supabase.from("empleados").select("*").eq("estado", "activo").order("primer_nombre");
     if (areaIdsFiltro) consultaEmpleados = consultaEmpleados.in("area_id", areaIdsFiltro);
 
-    const [{ data: datosAsistencia }, { data: datosPagos }, { data: datosEmpleados }] = await Promise.all([
-      consulta,
-      consultaPagos,
-      consultaEmpleados,
-    ]);
-
-    setAsistencias((datosAsistencia as AsistenciaDiaria[]) ?? []);
-    const mapa: Record<string, EstadoPago> = {};
-    for (const p of (datosPagos as { empleado_id: string; estado: EstadoPago }[]) ?? []) {
-      mapa[p.empleado_id] = p.estado;
+    const [respAsistencia, respPagos, respEmpleados] = await Promise.all([consulta, consultaPagos, consultaEmpleados]);
+    const error = respAsistencia.error ?? respPagos.error ?? respEmpleados.error;
+    if (error) {
+      mostrarToast(mensajeErrorConsulta(error, "No se pudo cargar la asistencia."), "error");
+      setAsistencias([]);
+      setEstadosPago({});
+      setEmpleados([]);
+    } else {
+      setAsistencias((respAsistencia.data as AsistenciaDiaria[]) ?? []);
+      const mapa: Record<string, EstadoPago> = {};
+      for (const p of (respPagos.data as { empleado_id: string; estado: EstadoPago }[]) ?? []) {
+        mapa[p.empleado_id] = p.estado;
+      }
+      setEstadosPago(mapa);
+      setEmpleados((respEmpleados.data as Empleado[]) ?? []);
     }
-    setEstadosPago(mapa);
-    setEmpleados((datosEmpleados as Empleado[]) ?? []);
     setCargando(false);
   }
 

@@ -5,6 +5,7 @@ import { useArea } from "../../context/AreaContext";
 import { useToast } from "../../context/ToastContext";
 import { llamarRpc } from "../../lib/rpc";
 import { fechaHoyInputCdmx, nombreCompletoEmpleado } from "../../lib/formato";
+import { mensajeErrorConsulta } from "../../lib/consulta";
 import EnvoltorioTabla from "../../components/EnvoltorioTabla";
 import ChipArea from "../../components/ChipArea";
 import type { Empleado, HorarioDiario, RespuestaRpc } from "../../lib/tipos";
@@ -34,9 +35,16 @@ export default function Horario() {
       .eq("fecha", fecha);
     if (areaIdsFiltro) consultaHorario = consultaHorario.in("area_id", areaIdsFiltro);
 
-    const [{ data: datosEmpleados }, { data: datosHorario }] = await Promise.all([consultaEmpleados, consultaHorario]);
-    setEmpleados((datosEmpleados as Empleado[]) ?? []);
-    setHorario((datosHorario as HorarioDiario[]) ?? []);
+    const [respEmpleados, respHorario] = await Promise.all([consultaEmpleados, consultaHorario]);
+    const error = respEmpleados.error ?? respHorario.error;
+    if (error) {
+      mostrarToast(mensajeErrorConsulta(error, "No se pudo cargar el horario."), "error");
+      setEmpleados([]);
+      setHorario([]);
+    } else {
+      setEmpleados((respEmpleados.data as Empleado[]) ?? []);
+      setHorario((respHorario.data as HorarioDiario[]) ?? []);
+    }
     setCargando(false);
   }
 

@@ -76,3 +76,9 @@ export function claseChipArea(nombre: string): string {
   if (n.includes("corred")) return "chip-area chip-area--corredores";
   return "chip-area chip-area--neutral";
 }
+
+/** Garantiza que desde ≤ hasta (útil en filtros y deep-links). */
+export function ordenarRangoFechas(desde: string, hasta: string): { desde: string; hasta: string } {
+  if (desde && hasta && desde > hasta) return { desde: hasta, hasta: desde };
+  return { desde, hasta };
+}

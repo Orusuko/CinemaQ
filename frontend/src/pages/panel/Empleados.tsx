@@ -5,6 +5,7 @@ import { useArea } from "../../context/AreaContext";
 import { useToast } from "../../context/ToastContext";
 import { llamarRpc } from "../../lib/rpc";
 import { nombreCompletoEmpleado } from "../../lib/formato";
+import { mensajeErrorConsulta } from "../../lib/consulta";
 import Modal from "../../components/Modal";
 import ModalConfirmacion from "../../components/ModalConfirmacion";
 import EnvoltorioTabla from "../../components/EnvoltorioTabla";
@@ -57,8 +58,13 @@ export default function Empleados() {
     setCargando(true);
     let consulta = supabase.from("empleados").select("*").order("primer_nombre");
     if (areaIdsFiltro) consulta = consulta.in("area_id", areaIdsFiltro);
-    const { data } = await consulta;
-    setEmpleados((data as Empleado[]) ?? []);
+    const { data, error } = await consulta;
+    if (error) {
+      mostrarToast(mensajeErrorConsulta(error, "No se pudieron cargar los empleados."), "error");
+      setEmpleados([]);
+    } else {
+      setEmpleados((data as Empleado[]) ?? []);
+    }
     setCargando(false);
   }
 

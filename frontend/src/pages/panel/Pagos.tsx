@@ -5,7 +5,8 @@ import { useAuth } from "../../context/AuthContext";
 import { useArea } from "../../context/AreaContext";
 import { useToast } from "../../context/ToastContext";
 import { llamarRpc } from "../../lib/rpc";
-import { fechaHoyInputCdmx, formatoFecha, formatoFechaHora, formatoMoneda, nombreCompletoEmpleado, ETIQUETAS_ESTADO_PAGO, claseEstadoPago } from "../../lib/formato";
+import { fechaHoyInputCdmx, formatoFecha, formatoFechaHora, formatoMoneda, nombreCompletoEmpleado, ETIQUETAS_ESTADO_PAGO, claseEstadoPago, ordenarRangoFechas } from "../../lib/formato";
+import { mensajeErrorConsulta, esFechaIsoValida } from "../../lib/consulta";
 import ModalConfirmacion from "../../components/ModalConfirmacion";
 import Modal from "../../components/Modal";
 import EnvoltorioTabla from "../../components/EnvoltorioTabla";
@@ -48,15 +49,21 @@ export default function Pagos() {
 
   async function cargar() {
     setCargando(true);
+    const rango = ordenarRangoFechas(desde, hasta);
     let consulta = supabase
       .from("pagos_cuota")
       .select("*, empleados(numero_empleado, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido)")
-      .gte("fecha", desde)
-      .lte("fecha", hasta)
+      .gte("fecha", rango.desde)
+      .lte("fecha", rango.hasta)
       .order("fecha", { ascending: false });
     if (areaIdsFiltro) consulta = consulta.in("area_id", areaIdsFiltro);
-    const { data } = await consulta;
-    setPagos((data as PagoCuota[]) ?? []);
+    const { data, error } = await consulta;
+    if (error) {
+      mostrarToast(mensajeErrorConsulta(error, "No se pudieron cargar los pagos."), "error");
+      setPagos([]);
+    } else {
+      setPagos((data as PagoCuota[]) ?? []);
+    }
     setCargando(false);
   }
 
@@ -69,6 +76,13 @@ export default function Pagos() {
     const pestanaUrl = searchParams.get("pestana");
     if (pestanaUrl === "revision" || pestanaUrl === "validados") {
       setPestana(pestanaUrl);
+    }
+    const desdeUrl = searchParams.get("desde");
+    const hastaUrl = searchParams.get("hasta");
+    if (esFechaIsoValida(desdeUrl) && esFechaIsoValida(hastaUrl)) {
+      const rango = ordenarRangoFechas(desdeUrl, hastaUrl);
+      setDesde(rango.desde);
+      setHasta(rango.hasta);
     }
   }, [searchParams]);
 
@@ -111,18 +125,26 @@ export default function Pagos() {
 
   async function confirmarRevertir(motivo: string | null) {
     if (!aRevertir) return;
-    await llamarRpc<RespuestaRpc>("revertir_validacion", { p_pago_id: aRevertir.id, p_motivo: motivo });
-    setARevertir(null);
-    await cargar();
-    mostrarToast("Validación revertida.", "exito");
+    try {
+      await llamarRpc<RespuestaRpc>("revertir_validacion", { p_pago_id: aRevertir.id, p_motivo: motivo });
+      setARevertir(null);
+      await cargar();
+      mostrarToast("Validación revertida.", "exito");
+    } catch (e) {
+      throw e instanceof Error ? e : new Error("No se pudo revertir la validación.");
+    }
   }
 
   async function confirmarEliminar() {
     if (!aEliminar) return;
-    await llamarRpc<RespuestaRpc>("eliminar_pago", { p_pago_id: aEliminar.id });
-    setAEliminar(null);
-    await cargar();
-    mostrarToast("Pago eliminado.", "exito");
+    try {
+      await llamarRpc<RespuestaRpc>("eliminar_pago", { p_pago_id: aEliminar.id });
+      setAEliminar(null);
+      await cargar();
+      mostrarToast("Pago eliminado.", "exito");
+    } catch (e) {
+      throw e instanceof Error ? e : new Error("No se pudo eliminar el pago.");
+    }
   }
 
   function nombreEmpleadoPago(p: PagoCuota) {
@@ -339,9 +361,23 @@ function ModalPagoManual({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let consulta = supabase.from("empleados").select("*").eq("estado", "activo").order("primer_nombre");
-    if (areaIdsFiltro) consulta = consulta.in("area_id", areaIdsFiltro);
-    consulta.then(({ data }) => setEmpleados((data as Empleado[]) ?? []));
+    let cancelado = false;
+    async function cargarEmpleados() {
+      let consulta = supabase.from("empleados").select("*").eq("estado", "activo").order("primer_nombre");
+      if (areaIdsFiltro) consulta = consulta.in("area_id", areaIdsFiltro);
+      const { data, error } = await consulta;
+      if (cancelado) return;
+      if (error) {
+        mostrarToast(mensajeErrorConsulta(error, "No se pudieron cargar los empleados."), "error");
+        setEmpleados([]);
+      } else {
+        setEmpleados((data as Empleado[]) ?? []);
+      }
+    }
+    cargarEmpleados();
+    return () => {
+      cancelado = true;
+    };
   }, [areaIdsFiltro]);
 
   async function enviar() {

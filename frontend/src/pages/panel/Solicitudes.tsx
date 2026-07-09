@@ -5,6 +5,7 @@ import { useArea } from "../../context/AreaContext";
 import { useToast } from "../../context/ToastContext";
 import { llamarRpc } from "../../lib/rpc";
 import { formatoFechaHora } from "../../lib/formato";
+import { mensajeErrorConsulta } from "../../lib/consulta";
 import ModalConfirmacion from "../../components/ModalConfirmacion";
 import EnvoltorioTabla from "../../components/EnvoltorioTabla";
 import ChipArea from "../../components/ChipArea";
@@ -28,11 +29,16 @@ export default function Solicitudes() {
 
   async function cargar() {
     setCargando(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("solicitudes_cambio_area")
       .select("*, empleados(numero_empleado, primer_nombre, primer_apellido)")
       .order("creado_en", { ascending: false });
-    setSolicitudes((data as SolicitudCambioArea[]) ?? []);
+    if (error) {
+      mostrarToast(mensajeErrorConsulta(error, "No se pudieron cargar las solicitudes."), "error");
+      setSolicitudes([]);
+    } else {
+      setSolicitudes((data as SolicitudCambioArea[]) ?? []);
+    }
     setCargando(false);
   }
 

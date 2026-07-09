@@ -21,14 +21,18 @@ export function AreaProvider({ children }: { children: ReactNode }) {
   const [cargando, setCargando] = useState(true);
 
   useEffect(() => {
-    supabase
-      .from("areas")
-      .select("*")
-      .order("nombre")
-      .then(({ data }) => {
-        setAreas((data as Area[]) ?? []);
-        setCargando(false);
-      });
+    let cancelado = false;
+    async function cargarAreas() {
+      setCargando(true);
+      const { data, error } = await supabase.from("areas").select("*").order("nombre");
+      if (cancelado) return;
+      setAreas(error ? [] : ((data as Area[]) ?? []));
+      setCargando(false);
+    }
+    cargarAreas();
+    return () => {
+      cancelado = true;
+    };
   }, []);
 
   useEffect(() => {

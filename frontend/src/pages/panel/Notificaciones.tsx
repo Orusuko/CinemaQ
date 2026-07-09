@@ -1,26 +1,34 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 import { useAuth } from "../../context/AuthContext";
+import { useToast } from "../../context/ToastContext";
 import { llamarRpc } from "../../lib/rpc";
 import { formatoFechaHora } from "../../lib/formato";
+import { mensajeErrorConsulta } from "../../lib/consulta";
 import EnvoltorioTabla from "../../components/EnvoltorioTabla";
 import type { Notificacion } from "../../lib/tipos";
 
 export default function Notificaciones() {
   const { perfil } = useAuth();
+  const { mostrarToast } = useToast();
   const [notificaciones, setNotificaciones] = useState<Notificacion[]>([]);
   const [cargando, setCargando] = useState(true);
 
   async function cargar() {
     if (!perfil) return;
     setCargando(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("notificaciones")
       .select("*")
       .eq("destinatario_id", perfil.id)
       .order("creado_en", { ascending: false })
       .limit(200);
-    setNotificaciones((data as Notificacion[]) ?? []);
+    if (error) {
+      mostrarToast(mensajeErrorConsulta(error, "No se pudieron cargar las notificaciones."), "error");
+      setNotificaciones([]);
+    } else {
+      setNotificaciones((data as Notificacion[]) ?? []);
+    }
     setCargando(false);
   }
 

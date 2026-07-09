@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { supabase } from "../lib/supabaseClient";
+import { supabase, supabaseConfigurado } from "../lib/supabaseClient";
+import { mensajeErrorConsulta } from "../lib/consulta";
 import { llamarRpc } from "../lib/rpc";
 import { useAuth } from "../context/AuthContext";
 import type { EmpleadoPublico, RespuestaRpc } from "../lib/tipos";
@@ -19,8 +20,22 @@ export default function PaginaPublica() {
 
   async function cargarDatos() {
     setCargandoLista(true);
-    const { data: listaEmpleados } = await supabase.rpc("listar_empleados_publicos");
-    setEmpleados((listaEmpleados as EmpleadoPublico[]) ?? []);
+    if (!supabaseConfigurado) {
+      setEmpleados([]);
+      setMensaje({
+        texto: "La aplicación no está configurada. Contacta al administrador del sistema.",
+        tipo: "error",
+      });
+      setCargandoLista(false);
+      return;
+    }
+    const { data: listaEmpleados, error } = await supabase.rpc("listar_empleados_publicos");
+    if (error) {
+      setEmpleados([]);
+      setMensaje({ texto: mensajeErrorConsulta(error, "No se pudo cargar la lista de empleados."), tipo: "error" });
+    } else {
+      setEmpleados((listaEmpleados as EmpleadoPublico[]) ?? []);
+    }
     setCargandoLista(false);
   }
 

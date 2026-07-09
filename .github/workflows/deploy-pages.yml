@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Permisos mínimos para publicar con actions/deploy-pages.
+# Nota: GITHUB_TOKEN NO puede habilitar Pages por API; hay que hacerlo
+# manualmente en Settings → Pages → Source: GitHub Actions (una sola vez).
 permissions:
   contents: read
   pages: write
@@ -17,7 +20,6 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    environment: github-pages
     steps:
       - name: Descargar repositorio
         uses: actions/checkout@v4
@@ -38,15 +40,12 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-          # Debe coincidir con el nombre del repositorio para que GitHub
-          # Pages sirva los assets desde la ruta correcta, p. ej. "/cuotas-propinas/".
+          # Debe coincidir con el nombre del repositorio, p. ej. "/CinemaQ/".
           VITE_BASE_PATH: /${{ github.event.repository.name }}/
         run: npm run build
 
       - name: Configurar GitHub Pages
         uses: actions/configure-pages@v5
-        with:
-          enablement: true
 
       - name: Subir artefacto de build
         uses: actions/upload-pages-artifact@v3
@@ -56,6 +55,9 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

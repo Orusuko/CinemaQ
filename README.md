@@ -111,21 +111,45 @@ llave. La llave `service_role` **nunca** debe usarse aquí.
 
 ## 4. Despliegue en GitHub Pages
 
-1. Crea un repositorio **público** en GitHub y sube este proyecto a la rama `main`.
-2. En **Settings → Pages**, selecciona la fuente **GitHub Actions**.
-3. En **Settings → Secrets and variables → Actions**, crea:
+### 4.1 Configuración única (manual, obligatoria)
+
+GitHub **no permite** que el workflow habilite Pages automáticamente (el token de
+Actions no tiene ese permiso). Debes hacer estos pasos **una vez** en el repo:
+
+1. **Settings → Actions → General → Workflow permissions**
+   - Elige **Read and write permissions** (no solo lectura).
+   - Guarda.
+
+2. **Settings → Pages → Build and deployment**
+   - **Source:** `GitHub Actions` (no “Deploy from a branch”).
+
+3. **Settings → Secrets and variables → Actions**, crea:
    - `VITE_SUPABASE_URL`
    - `VITE_SUPABASE_ANON_KEY`
-4. Cada push a `main` dispara `.github/workflows/deploy-pages.yml`, que
-   compila `frontend/` (inyectando los secrets y el `base path` con el
-   nombre del repositorio) y publica el resultado en GitHub Pages.
 
-> **Nota técnica (CI):** El workflow usa **Node 24** y pasa `enablement: true`
-> a `configure-pages@v5`. Sin este flag, la acción falla con
-> `HttpError: Not Found` cuando Pages no está habilitado todavía con GitHub
-> Actions como fuente. El job `build` también declara
-> `environment: github-pages` para que GitHub vincule el entorno
-> correctamente.
+4. En Supabase → **Project Settings → API → CORS**, agrega:
+   - `https://TU-USUARIO.github.io` (sin barra final).
+
+### 4.2 Despliegue automático
+
+Cada push a `main` dispara `.github/workflows/deploy-pages.yml`, que compila
+`frontend/` (inyectando los secrets y el `base path` con el nombre del
+repositorio) y publica el resultado en GitHub Pages.
+
+URL esperada: `https://TU-USUARIO.github.io/NOMBRE-DEL-REPO/`  
+(ejemplo: `https://orusuko.github.io/CinemaQ/`)
+
+### 4.3 Si el workflow falla
+
+| Error en Actions | Causa | Solución |
+|------------------|-------|----------|
+| `Resource not accessible by integration` | Pages no habilitado o permisos de workflow en solo lectura | Pasos 4.1 (1) y (2) |
+| `Get Pages site failed … Not Found` | Source de Pages no es “GitHub Actions” | Settings → Pages → Source: **GitHub Actions** |
+| Build OK pero sitio en blanco / 404 | `VITE_BASE_PATH` distinto al nombre del repo | El workflow usa `/${{ github.event.repository.name }}/` automáticamente |
+| App carga pero Supabase falla | Secrets faltantes o CORS | Pasos 4.1 (3) y (4) |
+
+> **Importante:** No uses `enablement: true` en `configure-pages`. Ese flag intenta
+> crear el sitio por API y falla con `Resource not accessible by integration`.
 
 El ruteo interno usa `HashRouter` (rutas tipo `/#/panel/dashboard`), por lo
 que **no** se necesita el truco de `404.html` para SPAs en GitHub Pages: el

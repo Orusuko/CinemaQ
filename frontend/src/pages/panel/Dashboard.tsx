@@ -7,6 +7,7 @@ import { formatoFecha, formatoMoneda, ETIQUETAS_ESTADO_PAGO, claseEstadoPago, no
 import { calcularRango, type PeriodoBalance } from "../../lib/rangosFecha";
 import { fechaHoyInputCdmx } from "../../lib/formato";
 import { descargarCsv, filaCsv, ENCABEZADOS_HISTORIAL, nombreArchivoCsv } from "../../lib/csv";
+import { mensajeErrorConsulta } from "../../lib/consulta";
 import EnvoltorioTabla from "../../components/EnvoltorioTabla";
 import Tabs from "../../components/Tabs";
 import ChipArea from "../../components/ChipArea";
@@ -62,9 +63,14 @@ export default function Dashboard() {
         .gte("fecha", rango.desde)
         .lte("fecha", rango.hasta);
       if (areaIdsFiltro) consulta = consulta.in("area_id", areaIdsFiltro);
-      const { data } = await consulta;
+      const { data, error } = await consulta;
       if (!cancelado) {
-        setPagos((data as PagoCuota[]) ?? []);
+        if (error) {
+          mostrarToast(mensajeErrorConsulta(error, "No se pudo cargar el balance."), "error");
+          setPagos([]);
+        } else {
+          setPagos((data as PagoCuota[]) ?? []);
+        }
         setCargando(false);
       }
     }
@@ -115,8 +121,8 @@ export default function Dashboard() {
       );
     }
     const nombreAreaArchivo = areaIdsFiltro && areaIdsFiltro.length === 1 ? nombreArea(areaIdsFiltro[0]) : "ambas";
-    descargarCsv(nombreArchivoCsv("balance", nombreAreaArchivo, rango.desde, rango.hasta), lineas);
-    mostrarToast("CSV descargado.", "exito");
+    const ok = descargarCsv(nombreArchivoCsv("balance", nombreAreaArchivo, rango.desde, rango.hasta), lineas);
+    mostrarToast(ok ? "CSV descargado." : "No se pudo descargar el CSV.", ok ? "exito" : "error");
   }
 
   const claseDiferencia = totales.diferencia === 0 ? "diferencia-cero" : "diferencia";
@@ -142,6 +148,8 @@ export default function Dashboard() {
     { id: "pendientes", etiqueta: "Pendientes por cobrar", contador: pendientes.length },
     { id: "todos", etiqueta: "Todos los pagos", contador: pagos.length },
   ];
+
+  const enlacePagosRevision = `/panel/pagos?pestana=revision&desde=${encodeURIComponent(rango.desde)}&hasta=${encodeURIComponent(rango.hasta)}`;
 
   return (
     <div>
@@ -218,7 +226,7 @@ export default function Dashboard() {
                 <div className="subvalor">
                   Pendiente de validación administrativa
                 </div>
-                <Link to="/panel/pagos?pestana=revision" className="enlace-accion" style={{ marginTop: "0.5rem" }}>
+                <Link to={enlacePagosRevision} className="enlace-accion" style={{ marginTop: "0.5rem" }}>
                   Revisar en Pagos →
                 </Link>
               </>
@@ -250,7 +258,7 @@ export default function Dashboard() {
                 <span className="icono-vacio">✅</span>
                 <p>No hay pagos pendientes en este periodo.</p>
                 <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
-                  <Link to="/panel/pagos?pestana=revision" className="enlace-accion">
+                  <Link to={enlacePagosRevision} className="enlace-accion">
                     Ir a Pagos →
                   </Link>
                   <Link to="/panel/horario" className="enlace-accion">
@@ -282,7 +290,7 @@ export default function Dashboard() {
                         </td>
                         <td>{formatoMoneda(p.monto_esperado)}</td>
                         <td>
-                          <Link to="/panel/pagos?pestana=revision" className="enlace-accion">
+                          <Link to={enlacePagosRevision} className="enlace-accion">
                             {esSupervision ? "Ver en Pagos →" : "Validar →"}
                           </Link>
                         </td>

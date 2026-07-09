@@ -3,12 +3,13 @@ import { supabase } from "../../lib/supabaseClient";
 import { useArea } from "../../context/AreaContext";
 import { formatoFechaHora, nombreCompletoEmpleado, formatoMoneda } from "../../lib/formato";
 import { descargarCsv, filaCsv, nombreArchivoCsv } from "../../lib/csv";
+import { mensajeErrorConsulta } from "../../lib/consulta";
 import EnvoltorioTabla from "../../components/EnvoltorioTabla";
 import Tabs from "../../components/Tabs";
 import Modal from "../../components/Modal";
 import ChipArea from "../../components/ChipArea";
 import { useToast } from "../../context/ToastContext";
-import { fechaHoyInputCdmx } from "../../lib/formato";
+import { fechaHoyInputCdmx, ordenarRangoFechas } from "../../lib/formato";
 import type { AsistenciaDiaria, PagoCuota } from "../../lib/tipos";
 import {
   type LogAuditoria,
@@ -61,38 +62,51 @@ export default function Auditoria() {
 
   async function cargar() {
     setCargando(true);
-    const { data: datosLogs } = await supabase
-      .from("logs_auditoria")
-      .select("*")
-      .gte("creado_en", `${desde}T00:00:00`)
-      .lte("creado_en", `${hasta}T23:59:59`)
-      .order("creado_en", { ascending: false })
-      .limit(500);
-    const registros = (datosLogs as LogAuditoria[]) ?? [];
-    setLogs(registros);
-    await cargarPerfiles(registros.map((l) => l.usuario_id).filter((id): id is string => Boolean(id)));
+    const rango = ordenarRangoFechas(desde, hasta);
+    try {
+      const { data: datosLogs, error: errorLogs } = await supabase
+        .from("logs_auditoria")
+        .select("*")
+        .gte("creado_en", `${rango.desde}T00:00:00`)
+        .lte("creado_en", `${rango.hasta}T23:59:59`)
+        .order("creado_en", { ascending: false })
+        .limit(500);
+      if (errorLogs) throw errorLogs;
 
-    let consultaEliminados = supabase
-      .from("asistencia_diaria")
-      .select("*, empleados(numero_empleado, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido)")
-      .eq("eliminado", true)
-      .gte("fecha", desde)
-      .lte("fecha", hasta);
-    if (areaIdsFiltro) consultaEliminados = consultaEliminados.in("area_id", areaIdsFiltro);
-    const { data: datosEliminados } = await consultaEliminados;
-    setEliminados((datosEliminados as AsistenciaDiaria[]) ?? []);
+      const registros = (datosLogs as LogAuditoria[]) ?? [];
+      setLogs(registros);
+      await cargarPerfiles(registros.map((l) => l.usuario_id).filter((id): id is string => Boolean(id)));
 
-    let consultaRevertidos = supabase
-      .from("pagos_cuota")
-      .select("*, empleados(numero_empleado, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido)")
-      .not("motivo_reversion", "is", null)
-      .gte("fecha", desde)
-      .lte("fecha", hasta);
-    if (areaIdsFiltro) consultaRevertidos = consultaRevertidos.in("area_id", areaIdsFiltro);
-    const { data: datosRevertidos } = await consultaRevertidos;
-    setRevertidos((datosRevertidos as PagoCuota[]) ?? []);
+      let consultaEliminados = supabase
+        .from("asistencia_diaria")
+        .select("*, empleados(numero_empleado, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido)")
+        .eq("eliminado", true)
+        .gte("fecha", rango.desde)
+        .lte("fecha", rango.hasta);
+      if (areaIdsFiltro) consultaEliminados = consultaEliminados.in("area_id", areaIdsFiltro);
+      const { data: datosEliminados, error: errorEliminados } = await consultaEliminados;
+      if (errorEliminados) throw errorEliminados;
+      setEliminados((datosEliminados as AsistenciaDiaria[]) ?? []);
 
-    setCargando(false);
+      let consultaRevertidos = supabase
+        .from("pagos_cuota")
+        .select("*, empleados(numero_empleado, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido)")
+        .not("motivo_reversion", "is", null)
+        .gte("fecha", rango.desde)
+        .lte("fecha", rango.hasta);
+      if (areaIdsFiltro) consultaRevertidos = consultaRevertidos.in("area_id", areaIdsFiltro);
+      const { data: datosRevertidos, error: errorRevertidos } = await consultaRevertidos;
+      if (errorRevertidos) throw errorRevertidos;
+      setRevertidos((datosRevertidos as PagoCuota[]) ?? []);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : mensajeErrorConsulta(null, "No se pudo cargar la auditoría.");
+      mostrarToast(msg, "error");
+      setLogs([]);
+      setEliminados([]);
+      setRevertidos([]);
+    } finally {
+      setCargando(false);
+    }
   }
 
   useEffect(() => {
@@ -136,8 +150,8 @@ export default function Auditoria() {
       );
     }
     const nombreAreaArchivo = areaIdsFiltro && areaIdsFiltro.length === 1 ? nombreArea(areaIdsFiltro[0]) : "ambas";
-    descargarCsv(nombreArchivoCsv("auditoria_general", nombreAreaArchivo, desde, hasta), lineas);
-    mostrarToast("CSV descargado.", "exito");
+    const ok = descargarCsv(nombreArchivoCsv("auditoria_general", nombreAreaArchivo, desde, hasta), lineas);
+    mostrarToast(ok ? "CSV descargado." : "No se pudo descargar el CSV.", ok ? "exito" : "error");
   }
 
   function exportarEliminados() {
@@ -154,8 +168,8 @@ export default function Auditoria() {
       );
     }
     const nombreAreaArchivo = areaIdsFiltro && areaIdsFiltro.length === 1 ? nombreArea(areaIdsFiltro[0]) : "ambas";
-    descargarCsv(nombreArchivoCsv("auditoria_eliminados", nombreAreaArchivo, desde, hasta), lineas);
-    mostrarToast("CSV descargado.", "exito");
+    const ok = descargarCsv(nombreArchivoCsv("auditoria_eliminados", nombreAreaArchivo, desde, hasta), lineas);
+    mostrarToast(ok ? "CSV descargado." : "No se pudo descargar el CSV.", ok ? "exito" : "error");
   }
 
   function exportarRevertidos() {
@@ -172,8 +186,8 @@ export default function Auditoria() {
       );
     }
     const nombreAreaArchivo = areaIdsFiltro && areaIdsFiltro.length === 1 ? nombreArea(areaIdsFiltro[0]) : "ambas";
-    descargarCsv(nombreArchivoCsv("auditoria_revertidos", nombreAreaArchivo, desde, hasta), lineas);
-    mostrarToast("CSV descargado.", "exito");
+    const ok = descargarCsv(nombreArchivoCsv("auditoria_revertidos", nombreAreaArchivo, desde, hasta), lineas);
+    mostrarToast(ok ? "CSV descargado." : "No se pudo descargar el CSV.", ok ? "exito" : "error");
   }
 
   return (

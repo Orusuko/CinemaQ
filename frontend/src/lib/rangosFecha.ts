@@ -1,4 +1,4 @@
-import { fechaHoyInputCdmx } from "./formato";
+import { fechaHoyInputCdmx, ordenarRangoFechas } from "./formato";
 
 export type PeriodoBalance = "dia" | "semana" | "mes" | "rango";
 
@@ -27,5 +27,5 @@ export function calcularRango(periodo: PeriodoBalance, rangoManual: { desde: str
     return { desde: aIso(primerDia), hasta: hoy };
   }
 
-  return rangoManual;
+  return ordenarRangoFechas(rangoManual.desde, rangoManual.hasta);
 }
