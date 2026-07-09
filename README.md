@@ -120,6 +120,13 @@ llave. La llave `service_role` **nunca** debe usarse aquí.
    compila `frontend/` (inyectando los secrets y el `base path` con el
    nombre del repositorio) y publica el resultado en GitHub Pages.
 
+> **Nota técnica (CI):** El workflow usa **Node 24** y pasa `enablement: true`
+> a `configure-pages@v5`. Sin este flag, la acción falla con
+> `HttpError: Not Found` cuando Pages no está habilitado todavía con GitHub
+> Actions como fuente. El job `build` también declara
+> `environment: github-pages` para que GitHub vincule el entorno
+> correctamente.
+
 El ruteo interno usa `HashRouter` (rutas tipo `/#/panel/dashboard`), por lo
 que **no** se necesita el truco de `404.html` para SPAs en GitHub Pages: el
 navegador nunca le pide al servidor una ruta que no exista, todo el ruteo

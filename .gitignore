@@ -20,3 +20,11 @@ supabase/.temp
 .idea
 .DS_Store
 *.log
+
+# Agentes / skills (solo local — no subir a GitHub)
+.agents/
+.cursor/
+AGENTS.md
+GEMINI.md
+HANDOFF.md
+skills-lock.json

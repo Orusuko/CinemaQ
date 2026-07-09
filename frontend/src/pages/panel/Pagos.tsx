@@ -1,31 +1,43 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
 import { useAuth } from "../../context/AuthContext";
 import { useArea } from "../../context/AreaContext";
 import { useToast } from "../../context/ToastContext";
 import { llamarRpc } from "../../lib/rpc";
-import { fechaHoyInputCdmx, formatoFecha, formatoFechaHora, formatoMoneda, nombreCompletoEmpleado } from "../../lib/formato";
+import { fechaHoyInputCdmx, formatoFecha, formatoFechaHora, formatoMoneda, nombreCompletoEmpleado, ETIQUETAS_ESTADO_PAGO, claseEstadoPago } from "../../lib/formato";
 import ModalConfirmacion from "../../components/ModalConfirmacion";
 import Modal from "../../components/Modal";
 import EnvoltorioTabla from "../../components/EnvoltorioTabla";
+import Tabs from "../../components/Tabs";
 import type { Empleado, PagoCuota, RespuestaRpc } from "../../lib/tipos";
 
-type Accion = "validar" | "rechazar";
+/* ------------------------------------------------------------------ */
+/* Skeletons                                                            */
+/* ------------------------------------------------------------------ */
+function SkeletonTabla({ filas = 4 }: { filas?: number }) {
+  return (
+    <div style={{ padding: "1rem" }}>
+      {Array.from({ length: filas }).map((_, i) => (
+        <div key={i} className="skeleton skeleton-fila" />
+      ))}
+    </div>
+  );
+}
 
+/* ------------------------------------------------------------------ */
+/* Componente principal                                                */
+/* ------------------------------------------------------------------ */
 export default function Pagos() {
   const { perfil } = useAuth();
   const esSupervision = perfil?.rol === "supervision";
   const { areaIdsFiltro, areas } = useArea();
   const { mostrarToast } = useToast();
-  const navegar = useNavigate();
 
   const [desde, setDesde] = useState(fechaHoyInputCdmx());
   const [hasta, setHasta] = useState(fechaHoyInputCdmx());
   const [pagos, setPagos] = useState<PagoCuota[]>([]);
   const [cargando, setCargando] = useState(true);
-  const [acciones, setAcciones] = useState<Record<string, Accion>>({});
-  const [guardando, setGuardando] = useState(false);
+  const [procesandoId, setProcesandoId] = useState<string | null>(null);
   const [aRevertir, setARevertir] = useState<PagoCuota | null>(null);
   const [aEliminar, setAEliminar] = useState<PagoCuota | null>(null);
   const [mostrarManual, setMostrarManual] = useState(false);
@@ -42,7 +54,6 @@ export default function Pagos() {
     if (areaIdsFiltro) consulta = consulta.in("area_id", areaIdsFiltro);
     const { data } = await consulta;
     setPagos((data as PagoCuota[]) ?? []);
-    setAcciones({});
     setCargando(false);
   }
 
@@ -61,36 +72,31 @@ export default function Pagos() {
     return areas.find((a) => a.id === areaId)?.nombre ?? "—";
   }
 
-  function marcarAccion(id: string, accion: Accion) {
-    setAcciones((prev) => ({ ...prev, [id]: prev[id] === accion ? undefined as unknown as Accion : accion }));
+  /* --- Acciones inline por fila --- */
+  async function validarPago(pagoId: string) {
+    setProcesandoId(pagoId);
+    try {
+      await llamarRpc("validar_pago", { p_pago_id: pagoId });
+      mostrarToast("Pago validado correctamente.", "exito");
+      await cargar();
+    } catch {
+      mostrarToast("Error al validar el pago.", "error");
+    } finally {
+      setProcesandoId(null);
+    }
   }
 
-  const cambiosPendientes = Object.values(acciones).filter(Boolean).length;
-
-  async function guardarCambios() {
-    setGuardando(true);
-    let exitos = 0;
-    let errores = 0;
-    for (const [pagoId, accion] of Object.entries(acciones)) {
-      if (!accion) continue;
-      try {
-        if (accion === "validar") {
-          await llamarRpc("validar_pago", { p_pago_id: pagoId });
-        } else {
-          await llamarRpc("rechazar_pago", { p_pago_id: pagoId });
-        }
-        exitos++;
-      } catch {
-        errores++;
-      }
+  async function rechazarPago(pagoId: string) {
+    setProcesandoId(pagoId);
+    try {
+      await llamarRpc("rechazar_pago", { p_pago_id: pagoId });
+      mostrarToast("Pago rechazado. El empleado puede volver a marcarlo.", "exito");
+      await cargar();
+    } catch {
+      mostrarToast("Error al rechazar el pago.", "error");
+    } finally {
+      setProcesandoId(null);
     }
-    setGuardando(false);
-    if (errores === 0) {
-      mostrarToast(`${exitos} cambio(s) guardado(s).`, "exito");
-    } else {
-      mostrarToast(`${exitos} cambio(s) guardado(s), ${errores} con error.`, "error");
-    }
-    navegar("/panel/dashboard");
   }
 
   async function confirmarRevertir(motivo: string | null) {
@@ -113,6 +119,11 @@ export default function Pagos() {
     return p.empleados ? nombreCompletoEmpleado(p.empleados) : "—";
   }
 
+  const pestanasConfig = [
+    { id: "revision", etiqueta: "Pendientes y en revisión", contador: enRevisionYPendientes.length },
+    { id: "validados", etiqueta: "Validados", contador: validados.length },
+  ];
+
   return (
     <div>
       <div className="barra-herramientas">
@@ -134,141 +145,132 @@ export default function Pagos() {
         </div>
       </div>
 
-      <div className="fila-acciones pestanas-panel" style={{ marginBottom: "1rem" }}>
-        <button
-          className={`boton ${pestana === "revision" ? "boton-primario" : "boton-secundario"}`}
-          onClick={() => setPestana("revision")}
-        >
-          Pendientes y en revisión ({enRevisionYPendientes.length})
-        </button>
-        <button
-          className={`boton ${pestana === "validados" ? "boton-primario" : "boton-secundario"}`}
-          onClick={() => setPestana("validados")}
-        >
-          Validados ({validados.length})
-        </button>
-      </div>
+      <Tabs pestanas={pestanasConfig} activa={pestana} onChange={(id) => setPestana(id as "revision" | "validados")}>
+        {pestana === "revision" && (
+          <>
+            {cargando ? (
+              <SkeletonTabla />
+            ) : enRevisionYPendientes.length === 0 ? (
+              <div className="estado-vacio-ilustrado">
+                <span className="icono-vacio">✅</span>
+                <p>No hay pagos pendientes o en revisión en este rango.</p>
+              </div>
+            ) : (
+              <EnvoltorioTabla>
+                <table className="tabla-datos">
+                  <thead>
+                    <tr>
+                      <th>Empleado</th>
+                      <th>Área</th>
+                      <th>Fecha</th>
+                      <th>Monto</th>
+                      <th>Estado</th>
+                      <th>Marcado por empleado</th>
+                      {!esSupervision && <th>Acciones</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {enRevisionYPendientes.map((p) => (
+                      <tr key={p.id}>
+                        <td>{p.empleados ? nombreCompletoEmpleado(p.empleados) : "—"}</td>
+                        <td>{nombreArea(p.area_id)}</td>
+                        <td>{formatoFecha(p.fecha)}</td>
+                        <td>{formatoMoneda(p.monto_esperado)}</td>
+                        <td>
+                          <span className={claseEstadoPago(p.estado)}>{ETIQUETAS_ESTADO_PAGO[p.estado]}</span>
+                        </td>
+                        <td>{p.marcado_por_empleado ? formatoFechaHora(p.marcado_empleado_en) : "No marcado"}</td>
+                        {!esSupervision && (
+                          <td className="fila-acciones">
+                            <div className="acciones-inline">
+                              <button
+                                className="boton boton-chico boton-validar"
+                                disabled={procesandoId === p.id}
+                                onClick={() => validarPago(p.id)}
+                              >
+                                {procesandoId === p.id ? "…" : "✓ Validar"}
+                              </button>
+                              {p.estado === "marcado_pendiente_validacion" && (
+                                <button
+                                  className="boton boton-chico boton-rechazar"
+                                  disabled={procesandoId === p.id}
+                                  onClick={() => rechazarPago(p.id)}
+                                >
+                                  {procesandoId === p.id ? "…" : "✗ Rechazar"}
+                                </button>
+                              )}
+                              <button
+                                className="boton boton-chico boton-peligro"
+                                disabled={procesandoId === p.id}
+                                onClick={() => setAEliminar(p)}
+                              >
+                                Eliminar
+                              </button>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </EnvoltorioTabla>
+            )}
+          </>
+        )}
 
-      {pestana === "revision" && (
-        <>
-          <EnvoltorioTabla>
-            <table className="tabla-datos">
-              <thead>
-                <tr>
-                  <th>Empleado</th>
-                  <th>Área</th>
-                  <th>Fecha</th>
-                  <th>Monto</th>
-                  <th>Marcado por empleado</th>
-                  {!esSupervision && <th>Validar</th>}
-                  {!esSupervision && <th>Rechazar</th>}
-                  {!esSupervision && <th>Acciones</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {enRevisionYPendientes.map((p) => (
-                  <tr key={p.id}>
-                    <td>{p.empleados ? nombreCompletoEmpleado(p.empleados) : "—"}</td>
-                    <td>{nombreArea(p.area_id)}</td>
-                    <td>{formatoFecha(p.fecha)}</td>
-                    <td>{formatoMoneda(p.monto_esperado)}</td>
-                    <td>{p.marcado_por_empleado ? formatoFechaHora(p.marcado_empleado_en) : "No marcado"}</td>
-                    {!esSupervision && (
-                      <td>
-                        <input
-                          type="checkbox"
-                          className="checkbox-fila"
-                          checked={acciones[p.id] === "validar"}
-                          onChange={() => marcarAccion(p.id, "validar")}
-                        />
-                      </td>
-                    )}
-                    {!esSupervision && (
-                      <td>
-                        <input
-                          type="checkbox"
-                          className="checkbox-fila"
-                          checked={acciones[p.id] === "rechazar"}
-                          onChange={() => marcarAccion(p.id, "rechazar")}
-                          disabled={p.estado !== "marcado_pendiente_validacion"}
-                        />
-                      </td>
-                    )}
-                    {!esSupervision && (
-                      <td className="fila-acciones">
-                        <button className="boton boton-chico boton-peligro" onClick={() => setAEliminar(p)}>
-                          Eliminar
-                        </button>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-                {!cargando && enRevisionYPendientes.length === 0 && (
-                  <tr>
-                    <td colSpan={esSupervision ? 5 : 8} className="estado-vacio">
-                      No hay pagos pendientes o en revisión en este rango.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-        </table>
-      </EnvoltorioTabla>
-          {!esSupervision && (
-            <div className="fila-acciones" style={{ justifyContent: "flex-end", marginTop: "1rem" }}>
-              <button className="boton boton-primario" disabled={cambiosPendientes === 0 || guardando} onClick={guardarCambios}>
-                {guardando ? "Guardando…" : `Guardar cambios (${cambiosPendientes})`}
-              </button>
-            </div>
-          )}
-        </>
-      )}
-
-      {pestana === "validados" && (
-        <EnvoltorioTabla>
-          <table className="tabla-datos">
-            <thead>
-              <tr>
-                <th>Empleado</th>
-                <th>Área</th>
-                <th>Fecha</th>
-                <th>Monto</th>
-                <th>Validado el</th>
-                <th>Origen</th>
-                {!esSupervision && <th>Acciones</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {validados.map((p) => (
-                <tr key={p.id}>
-                  <td>{p.empleados ? nombreCompletoEmpleado(p.empleados) : "—"}</td>
-                  <td>{nombreArea(p.area_id)}</td>
-                  <td>{formatoFecha(p.fecha)}</td>
-                  <td>{formatoMoneda(p.monto_esperado)}</td>
-                  <td>{formatoFechaHora(p.validado_en)}</td>
-                  <td>{p.origen === "manual_admin" ? "Manual" : "Flujo normal"}</td>
-                  {!esSupervision && (
-                    <td className="fila-acciones">
-                      <button className="boton boton-chico boton-secundario" onClick={() => setARevertir(p)}>
-                        Revertir
-                      </button>
-                      <button className="boton boton-chico boton-peligro" onClick={() => setAEliminar(p)}>
-                        Eliminar
-                      </button>
-                    </td>
-                  )}
-                </tr>
-              ))}
-              {!cargando && validados.length === 0 && (
-                <tr>
-                  <td colSpan={esSupervision ? 6 : 7} className="estado-vacio">
-                    No hay pagos validados en este rango.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-        </table>
-      </EnvoltorioTabla>
-      )}
+        {pestana === "validados" && (
+          <>
+            {cargando ? (
+              <SkeletonTabla filas={6} />
+            ) : validados.length === 0 ? (
+              <div className="estado-vacio-ilustrado">
+                <span className="icono-vacio">📋</span>
+                <p>No hay pagos validados en este rango.</p>
+              </div>
+            ) : (
+              <EnvoltorioTabla>
+                <table className="tabla-datos">
+                  <thead>
+                    <tr>
+                      <th>Empleado</th>
+                      <th>Área</th>
+                      <th>Fecha</th>
+                      <th>Monto</th>
+                      <th>Validado el</th>
+                      <th>Origen</th>
+                      {!esSupervision && <th>Acciones</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {validados.map((p) => (
+                      <tr key={p.id}>
+                        <td>{p.empleados ? nombreCompletoEmpleado(p.empleados) : "—"}</td>
+                        <td>{nombreArea(p.area_id)}</td>
+                        <td>{formatoFecha(p.fecha)}</td>
+                        <td>{formatoMoneda(p.monto_esperado)}</td>
+                        <td>{formatoFechaHora(p.validado_en)}</td>
+                        <td>{p.origen === "manual_admin" ? "Manual" : "Flujo normal"}</td>
+                        {!esSupervision && (
+                          <td className="fila-acciones">
+                            <div className="acciones-inline">
+                              <button className="boton boton-chico boton-secundario" onClick={() => setARevertir(p)}>
+                                Revertir
+                              </button>
+                              <button className="boton boton-chico boton-peligro" onClick={() => setAEliminar(p)}>
+                                Eliminar
+                              </button>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </EnvoltorioTabla>
+            )}
+          </>
+        )}
+      </Tabs>
 
       {aRevertir && (
         <ModalConfirmacion

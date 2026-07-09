@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
 import { useArea } from "../../context/AreaContext";
 import { formatoFecha, formatoMoneda, ETIQUETAS_ESTADO_PAGO, claseEstadoPago, nombreCompletoEmpleado } from "../../lib/formato";
@@ -6,14 +7,41 @@ import { calcularRango, type PeriodoBalance } from "../../lib/rangosFecha";
 import { fechaHoyInputCdmx } from "../../lib/formato";
 import { descargarCsv, filaCsv, ENCABEZADOS_HISTORIAL, nombreArchivoCsv } from "../../lib/csv";
 import EnvoltorioTabla from "../../components/EnvoltorioTabla";
+import Tabs from "../../components/Tabs";
 import type { PagoCuota } from "../../lib/tipos";
 
+/* ------------------------------------------------------------------ */
+/* Skeletons reutilizables                                             */
+/* ------------------------------------------------------------------ */
+function SkeletonKpi() {
+  return (
+    <div className="tarjeta tarjeta-kpi">
+      <div className="skeleton skeleton-texto" style={{ width: "50%" }} />
+      <div className="skeleton skeleton-kpi" />
+    </div>
+  );
+}
+
+function SkeletonTabla({ filas = 4 }: { filas?: number }) {
+  return (
+    <div style={{ padding: "1rem" }}>
+      {Array.from({ length: filas }).map((_, i) => (
+        <div key={i} className="skeleton skeleton-fila" />
+      ))}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Componente principal                                                */
+/* ------------------------------------------------------------------ */
 export default function Dashboard() {
   const { areas, areaIdsFiltro, cargando: cargandoAreas } = useArea();
   const [periodo, setPeriodo] = useState<PeriodoBalance>("dia");
   const [rangoManual, setRangoManual] = useState({ desde: fechaHoyInputCdmx(), hasta: fechaHoyInputCdmx() });
   const [pagos, setPagos] = useState<PagoCuota[]>([]);
   const [cargando, setCargando] = useState(true);
+  const [pestana, setPestana] = useState<"pendientes" | "todos">("pendientes");
 
   const rango = useMemo(() => calcularRango(periodo, rangoManual), [periodo, rangoManual]);
 
@@ -84,10 +112,35 @@ export default function Dashboard() {
     descargarCsv(nombreArchivoCsv("balance", nombreAreaArchivo, rango.desde, rango.hasta), lineas);
   }
 
+  const claseDiferencia = totales.diferencia === 0 ? "diferencia-cero" : "diferencia";
+
+  const ETIQUETAS_PERIODO: Record<PeriodoBalance, string> = {
+    dia: "Hoy",
+    semana: "Esta semana",
+    mes: "Este mes",
+    rango: `${rango.desde} – ${rango.hasta}`,
+  };
+
+  const etiquetaArea = (() => {
+    if (!areaIdsFiltro) return "Ambas áreas";
+    if (areaIdsFiltro.length === 1) return nombreArea(areaIdsFiltro[0]);
+    return "Ambas áreas";
+  })();
+
+  const subtituloPeriodo = `${ETIQUETAS_PERIODO[periodo]} · ${etiquetaArea}`;
+
+  const pestanasConfig = [
+    { id: "pendientes", etiqueta: "Pendientes por cobrar", contador: pendientes.length },
+    { id: "todos", etiqueta: "Todos los pagos", contador: pagos.length },
+  ];
+
   return (
     <div>
       <div className="barra-herramientas">
-        <h2>Balance</h2>
+        <div>
+          <h2 style={{ marginBottom: "0.15rem" }}>Balance</h2>
+          <p className="texto-suave" style={{ margin: 0, fontSize: "0.85rem" }}>{subtituloPeriodo}</p>
+        </div>
         <div className="grupo-filtros">
           <div className="campo" style={{ marginBottom: 0 }}>
             <label>Periodo</label>
@@ -124,56 +177,132 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="rejilla-kpi">
-        <div className="tarjeta tarjeta-kpi">
-          <div className="etiqueta-kpi">Esperado (debes tener)</div>
-          <div className="valor-kpi">{formatoMoneda(totales.esperado)}</div>
+      {/* ---- KPIs ---- */}
+      {cargando ? (
+        <div className="rejilla-kpi">
+          <SkeletonKpi />
+          <SkeletonKpi />
+          <SkeletonKpi />
+          <SkeletonKpi />
         </div>
-        <div className="tarjeta tarjeta-kpi">
-          <div className="etiqueta-kpi">Recaudado (validado)</div>
-          <div className="valor-kpi">{formatoMoneda(totales.recaudado)}</div>
-        </div>
-        <div className="tarjeta tarjeta-kpi">
-          <div className="etiqueta-kpi">Diferencia</div>
-          <div className="valor-kpi diferencia">{formatoMoneda(totales.diferencia)}</div>
-          {totales.enRevision > 0 && <div className="subvalor">{formatoMoneda(totales.enRevision)} en revisión</div>}
-        </div>
-      </div>
-
-      <h3>Pendientes por cobrar</h3>
-      <EnvoltorioTabla>
-        <table className="tabla-datos">
-          <thead>
-            <tr>
-              <th>Empleado</th>
-              <th>Área</th>
-              <th>Fecha</th>
-              <th>Estado</th>
-              <th>Monto</th>
-            </tr>
-          </thead>
-          <tbody>
-            {pendientes.map((p) => (
-              <tr key={p.id}>
-                <td>{p.empleados ? nombreCompletoEmpleado(p.empleados) : "—"}</td>
-                <td>{nombreArea(p.area_id)}</td>
-                <td>{formatoFecha(p.fecha)}</td>
-                <td>
-                  <span className={claseEstadoPago(p.estado)}>{ETIQUETAS_ESTADO_PAGO[p.estado]}</span>
-                </td>
-                <td>{formatoMoneda(p.monto_esperado)}</td>
-              </tr>
-            ))}
-            {!cargando && pendientes.length === 0 && (
-              <tr>
-                <td colSpan={5} className="estado-vacio">
-                  No hay pendientes en este periodo.
-                </td>
-              </tr>
+      ) : (
+        <div className="rejilla-kpi">
+          <div className="tarjeta tarjeta-kpi">
+            <div className="etiqueta-kpi">Esperado (debes tener)</div>
+            <div className="valor-kpi">{formatoMoneda(totales.esperado)}</div>
+          </div>
+          <div className="tarjeta tarjeta-kpi">
+            <div className="etiqueta-kpi">Recaudado (validado)</div>
+            <div className="valor-kpi">{formatoMoneda(totales.recaudado)}</div>
+          </div>
+          <div className="tarjeta tarjeta-kpi">
+            <div className="etiqueta-kpi">Diferencia</div>
+            <div className={`valor-kpi ${claseDiferencia}`}>{formatoMoneda(totales.diferencia)}</div>
+          </div>
+          <div className="tarjeta tarjeta-kpi tarjeta-kpi--en-revision">
+            <div className="etiqueta-kpi">En revisión</div>
+            <div className="valor-kpi" style={{ color: "var(--color-advertencia)" }}>
+              {formatoMoneda(totales.enRevision)}
+            </div>
+            {totales.enRevision > 0 && (
+              <div className="subvalor">
+                Pendiente de validación administrativa
+              </div>
             )}
-          </tbody>
-        </table>
-      </EnvoltorioTabla>
+          </div>
+        </div>
+      )}
+
+      {/* ---- Tabs ---- */}
+      <Tabs pestanas={pestanasConfig} activa={pestana} onChange={(id) => setPestana(id as "pendientes" | "todos")}>
+        {pestana === "pendientes" && (
+          <>
+            {cargando ? (
+              <SkeletonTabla />
+            ) : pendientes.length === 0 ? (
+              <div className="estado-vacio-ilustrado">
+                <span className="icono-vacio">✅</span>
+                <p>No hay pagos pendientes en este periodo.</p>
+                <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+                  <Link to="/panel/pagos" className="enlace-accion">
+                    Ir a Pagos →
+                  </Link>
+                  <Link to="/panel/horario" className="enlace-accion">
+                    Ver Horario →
+                  </Link>
+                </div>
+              </div>
+            ) : (
+              <EnvoltorioTabla>
+                <table className="tabla-datos">
+                  <thead>
+                    <tr>
+                      <th>Empleado</th>
+                      <th>Área</th>
+                      <th>Fecha</th>
+                      <th>Estado</th>
+                      <th>Monto</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pendientes.map((p) => (
+                      <tr key={p.id}>
+                        <td>{p.empleados ? nombreCompletoEmpleado(p.empleados) : "—"}</td>
+                        <td>{nombreArea(p.area_id)}</td>
+                        <td>{formatoFecha(p.fecha)}</td>
+                        <td>
+                          <span className={claseEstadoPago(p.estado)}>{ETIQUETAS_ESTADO_PAGO[p.estado]}</span>
+                        </td>
+                        <td>{formatoMoneda(p.monto_esperado)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </EnvoltorioTabla>
+            )}
+          </>
+        )}
+
+        {pestana === "todos" && (
+          <>
+            {cargando ? (
+              <SkeletonTabla filas={6} />
+            ) : pagos.length === 0 ? (
+              <div className="estado-vacio-ilustrado">
+                <span className="icono-vacio">📋</span>
+                <p>No hay pagos registrados en este periodo.</p>
+              </div>
+            ) : (
+              <EnvoltorioTabla>
+                <table className="tabla-datos">
+                  <thead>
+                    <tr>
+                      <th>Empleado</th>
+                      <th>Área</th>
+                      <th>Fecha</th>
+                      <th>Estado</th>
+                      <th>Monto</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pagos.map((p) => (
+                      <tr key={p.id}>
+                        <td>{p.empleados ? nombreCompletoEmpleado(p.empleados) : "—"}</td>
+                        <td>{nombreArea(p.area_id)}</td>
+                        <td>{formatoFecha(p.fecha)}</td>
+                        <td>
+                          <span className={claseEstadoPago(p.estado)}>{ETIQUETAS_ESTADO_PAGO[p.estado]}</span>
+                        </td>
+                        <td>{formatoMoneda(p.monto_esperado)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </EnvoltorioTabla>
+            )}
+          </>
+        )}
+      </Tabs>
     </div>
   );
 }
