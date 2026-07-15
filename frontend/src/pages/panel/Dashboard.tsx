@@ -3,16 +3,35 @@ import { Link } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
 import { useAuth } from "../../context/AuthContext";
 import { useArea } from "../../context/AreaContext";
-import { formatoFecha, formatoMoneda, ETIQUETAS_ESTADO_PAGO, claseEstadoPago, nombreCompletoEmpleado } from "../../lib/formato";
+import {
+  formatoFecha,
+  formatoFechaHora,
+  formatoMoneda,
+  ETIQUETAS_ESTADO_PAGO,
+  claseEstadoPago,
+  nombreCompletoEmpleado,
+  fechaHoyInputCdmx,
+} from "../../lib/formato";
 import { calcularRango, type PeriodoBalance } from "../../lib/rangosFecha";
-import { fechaHoyInputCdmx } from "../../lib/formato";
+import {
+  calcularPeriodoAbierto,
+  cierreMasAntiguoEntre,
+  formatoRangoPeriodo,
+  hoyCdmx,
+} from "../../lib/periodoAbierto";
 import { descargarCsv, filaCsv, ENCABEZADOS_HISTORIAL, nombreArchivoCsv } from "../../lib/csv";
 import { mensajeErrorConsulta } from "../../lib/consulta";
 import EnvoltorioTabla from "../../components/EnvoltorioTabla";
 import Tabs from "../../components/Tabs";
 import ChipArea from "../../components/ChipArea";
+import Modal from "../../components/Modal";
 import { useToast } from "../../context/ToastContext";
 import type { PagoCuota } from "../../lib/tipos";
+
+/* ------------------------------------------------------------------ */
+/* Tipos locales                                                        */
+/* ------------------------------------------------------------------ */
+type FiltroDrillDown = "todos" | "pendiente" | "en_revision" | "con_marcado" | "sin_marcado";
 
 /* ------------------------------------------------------------------ */
 /* Skeletons reutilizables                                             */
@@ -44,61 +63,227 @@ export default function Dashboard() {
   const esSupervision = perfil?.rol === "supervision";
   const { areas, areaIdsFiltro, cargando: cargandoAreas } = useArea();
   const { mostrarToast } = useToast();
+
+  /* --- Estado periodo abierto --- */
+  const [pagosPeriodo, setPagosPeriodo] = useState<PagoCuota[]>([]);
+  const [cargandoPeriodo, setCargandoPeriodo] = useState(true);
+  const [rangoPeriodo, setRangoPeriodo] = useState({ desde: "", hasta: "" });
+
+  /* --- Estado vista histórica --- */
   const [periodo, setPeriodo] = useState<PeriodoBalance>("dia");
   const [rangoManual, setRangoManual] = useState({ desde: fechaHoyInputCdmx(), hasta: fechaHoyInputCdmx() });
-  const [pagos, setPagos] = useState<PagoCuota[]>([]);
-  const [cargando, setCargando] = useState(true);
-  const [pestana, setPestana] = useState<"pendientes" | "todos">("pendientes");
+  const [pagosHistorico, setPagosHistorico] = useState<PagoCuota[]>([]);
+  const [cargandoHistorico, setCargandoHistorico] = useState(false);
+  const [historicoAbierto, setHistoricoAbierto] = useState(false);
+  const [pestanaHistorico, setPestanaHistorico] = useState<"pendientes" | "todos">("pendientes");
 
-  const rango = useMemo(() => calcularRango(periodo, rangoManual), [periodo, rangoManual]);
+  /* --- Modal drill-down --- */
+  const [modalAbierto, setModalAbierto] = useState(false);
+  const [filtroModal, setFiltroModal] = useState<FiltroDrillDown>("todos");
 
+  const rangoHistorico = useMemo(() => calcularRango(periodo, rangoManual), [periodo, rangoManual]);
+
+  /* ---------------------------------------------------------------- */
+  /* Cargar periodo contable abierto                                    */
+  /* ---------------------------------------------------------------- */
   useEffect(() => {
     if (cargandoAreas) return;
     let cancelado = false;
+
     async function cargar() {
-      setCargando(true);
-      let consulta = supabase
+      setCargandoPeriodo(true);
+      const hoy = hoyCdmx();
+
+      /* 1. Obtener último cierre por área */
+      let consultaCierres = supabase
+        .from("cierres_periodo")
+        .select("hasta")
+        .order("cerrado_en", { ascending: false });
+
+      if (areaIdsFiltro) {
+        consultaCierres = consultaCierres.in("area_id", areaIdsFiltro);
+      }
+
+      const { data: cierresData } = await consultaCierres;
+      if (cancelado) return;
+
+      /* Agrupar por área para obtener el más reciente de cada una,
+         luego tomar el más antiguo entre ellos (para cubrir ambas áreas). */
+      let ultimoCierre: { hasta: string } | null = null;
+      if (cierresData && cierresData.length > 0) {
+        /* cierresData ya viene ordenado desc por cerrado_en;
+           el primer registro es el cierre más reciente global.
+           Si filtramos ambas áreas, usamos el más antiguo entre
+           los más recientes de cada área para no dejar deuda fuera. */
+        if (!areaIdsFiltro || areaIdsFiltro.length <= 1) {
+          ultimoCierre = { hasta: (cierresData[0] as { hasta: string }).hasta };
+        } else {
+          /* Cuando hay varias áreas, tomar el hasta más antiguo */
+          const cierresUnicos = cierresData.map((c) => ({ hasta: (c as { hasta: string }).hasta }));
+          ultimoCierre = cierreMasAntiguoEntre(cierresUnicos);
+        }
+      }
+
+      /* 2. Calcular rango del periodo abierto */
+      const rango = calcularPeriodoAbierto(ultimoCierre, hoy);
+      setRangoPeriodo(rango);
+
+      /* 3. Consultar pagos del periodo abierto */
+      let consultaPagos = supabase
         .from("pagos_cuota")
         .select("*, empleados(numero_empleado, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido)")
         .gte("fecha", rango.desde)
         .lte("fecha", rango.hasta);
-      if (areaIdsFiltro) consulta = consulta.in("area_id", areaIdsFiltro);
-      const { data, error } = await consulta;
-      if (!cancelado) {
-        if (error) {
-          mostrarToast(mensajeErrorConsulta(error, "No se pudo cargar el balance."), "error");
-          setPagos([]);
-        } else {
-          setPagos((data as PagoCuota[]) ?? []);
-        }
-        setCargando(false);
-      }
-    }
-    cargar();
-    return () => {
-      cancelado = true;
-    };
-  }, [rango, areaIdsFiltro, cargandoAreas]);
 
-  const totales = useMemo(() => {
+      if (areaIdsFiltro) consultaPagos = consultaPagos.in("area_id", areaIdsFiltro);
+
+      const { data: pagosData, error } = await consultaPagos;
+      if (cancelado) return;
+
+      if (error) {
+        mostrarToast(mensajeErrorConsulta(error, "No se pudo cargar el balance del periodo."), "error");
+        setPagosPeriodo([]);
+      } else {
+        setPagosPeriodo((pagosData as PagoCuota[]) ?? []);
+      }
+      setCargandoPeriodo(false);
+    }
+
+    cargar();
+    return () => { cancelado = true; };
+  }, [areaIdsFiltro, cargandoAreas]);
+
+  /* ---------------------------------------------------------------- */
+  /* Cargar vista histórica (solo cuando se abre)                       */
+  /* ---------------------------------------------------------------- */
+  useEffect(() => {
+    if (!historicoAbierto || cargandoAreas) return;
+    let cancelado = false;
+
+    async function cargar() {
+      setCargandoHistorico(true);
+      let consulta = supabase
+        .from("pagos_cuota")
+        .select("*, empleados(numero_empleado, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido)")
+        .gte("fecha", rangoHistorico.desde)
+        .lte("fecha", rangoHistorico.hasta);
+
+      if (areaIdsFiltro) consulta = consulta.in("area_id", areaIdsFiltro);
+
+      const { data, error } = await consulta;
+      if (cancelado) return;
+
+      if (error) {
+        mostrarToast(mensajeErrorConsulta(error, "No se pudo cargar el historial."), "error");
+        setPagosHistorico([]);
+      } else {
+        setPagosHistorico((data as PagoCuota[]) ?? []);
+      }
+      setCargandoHistorico(false);
+    }
+
+    cargar();
+    return () => { cancelado = true; };
+  }, [rangoHistorico, areaIdsFiltro, cargandoAreas, historicoAbierto]);
+
+  /* ---------------------------------------------------------------- */
+  /* Cálculos derivados — Periodo abierto                               */
+  /* ---------------------------------------------------------------- */
+  const totalesPeriodo = useMemo(() => {
     let esperado = 0;
     let recaudado = 0;
     let enRevision = 0;
-    for (const p of pagos) {
+    let faltaPorCobrar = 0;
+    let pendientes = 0;
+    for (const p of pagosPeriodo) {
+      if (p.estado !== "cancelado") esperado += Number(p.monto_esperado);
+      if (p.estado === "validado") recaudado += Number(p.monto_esperado);
+      if (p.estado === "marcado_pendiente_validacion") enRevision += Number(p.monto_esperado);
+      if (p.estado === "pendiente") {
+        faltaPorCobrar += Number(p.monto_esperado);
+        pendientes++;
+      }
+    }
+    return {
+      esperado,
+      recaudado,
+      enRevision,
+      faltaPorCobrar,
+      pendientes,
+    };
+  }, [pagosPeriodo]);
+
+  const pctRecaudado = totalesPeriodo.esperado > 0
+    ? Math.min(100, Math.round((totalesPeriodo.recaudado / totalesPeriodo.esperado) * 100))
+    : 0;
+
+  /* Pagos de hoy (subconjunto del periodo, filtrado en cliente) */
+  const hoy = hoyCdmx();
+  const pagosHoy = useMemo(() => pagosPeriodo.filter((p) => p.fecha === hoy), [pagosPeriodo, hoy]);
+  const totalesHoy = useMemo(() => {
+    let pendientes = 0;
+    let enRevision = 0;
+    let validados = 0;
+    for (const p of pagosHoy) {
+      if (p.estado === "pendiente") pendientes++;
+      if (p.estado === "marcado_pendiente_validacion") enRevision++;
+      if (p.estado === "validado") validados++;
+    }
+    return { pendientes, enRevision, validados };
+  }, [pagosHoy]);
+
+  /* Pagos para el modal drill-down (pendientes + en revisión del periodo) */
+  const pagosDrillDown = useMemo(() => {
+    const noResueltos = pagosPeriodo.filter(
+      (p) => p.estado === "pendiente" || p.estado === "marcado_pendiente_validacion",
+    );
+    /* Orden: deuda más antigua primero */
+    noResueltos.sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : 0));
+    return noResueltos;
+  }, [pagosPeriodo]);
+
+  const pagosDrillDownFiltrados = useMemo(() => {
+    switch (filtroModal) {
+      case "pendiente":
+        return pagosDrillDown.filter((p) => p.estado === "pendiente");
+      case "en_revision":
+        return pagosDrillDown.filter((p) => p.estado === "marcado_pendiente_validacion");
+      case "con_marcado":
+        return pagosDrillDown.filter((p) => p.marcado_por_empleado);
+      case "sin_marcado":
+        return pagosDrillDown.filter((p) => !p.marcado_por_empleado);
+      default:
+        return pagosDrillDown;
+    }
+  }, [pagosDrillDown, filtroModal]);
+
+  /* ---------------------------------------------------------------- */
+  /* Cálculos derivados — Vista histórica                               */
+  /* ---------------------------------------------------------------- */
+  const totalesHistorico = useMemo(() => {
+    let esperado = 0;
+    let recaudado = 0;
+    let enRevision = 0;
+    for (const p of pagosHistorico) {
       if (p.estado !== "cancelado") esperado += Number(p.monto_esperado);
       if (p.estado === "validado") recaudado += Number(p.monto_esperado);
       if (p.estado === "marcado_pendiente_validacion") enRevision += Number(p.monto_esperado);
     }
     return { esperado, recaudado, enRevision, diferencia: esperado - recaudado };
-  }, [pagos]);
+  }, [pagosHistorico]);
 
-  const pendientes = pagos.filter((p) => p.estado === "pendiente" || p.estado === "marcado_pendiente_validacion");
+  const pendientesHistorico = pagosHistorico.filter(
+    (p) => p.estado === "pendiente" || p.estado === "marcado_pendiente_validacion",
+  );
 
+  /* ---------------------------------------------------------------- */
+  /* Helpers                                                            */
+  /* ---------------------------------------------------------------- */
   function nombreArea(areaId: string) {
     return areas.find((a) => a.id === areaId)?.nombre ?? "—";
   }
 
-  function exportarBalance() {
+  function exportarBalance(pagos: PagoCuota[], desde: string, hasta: string, prefijo: string) {
     const lineas = [filaCsv(ENCABEZADOS_HISTORIAL)];
     for (const p of pagos) {
       lineas.push(
@@ -121,18 +306,9 @@ export default function Dashboard() {
       );
     }
     const nombreAreaArchivo = areaIdsFiltro && areaIdsFiltro.length === 1 ? nombreArea(areaIdsFiltro[0]) : "ambas";
-    const ok = descargarCsv(nombreArchivoCsv("balance", nombreAreaArchivo, rango.desde, rango.hasta), lineas);
+    const ok = descargarCsv(nombreArchivoCsv(prefijo, nombreAreaArchivo, desde, hasta), lineas);
     mostrarToast(ok ? "CSV descargado." : "No se pudo descargar el CSV.", ok ? "exito" : "error");
   }
-
-  const claseDiferencia = totales.diferencia === 0 ? "diferencia-cero" : "diferencia";
-
-  const ETIQUETAS_PERIODO: Record<PeriodoBalance, string> = {
-    dia: "Hoy",
-    semana: "Esta semana",
-    mes: "Este mes",
-    rango: `${rango.desde} – ${rango.hasta}`,
-  };
 
   const etiquetaArea = (() => {
     if (!areaIdsFiltro) return "Ambas áreas";
@@ -140,63 +316,67 @@ export default function Dashboard() {
     return "Ambas áreas";
   })();
 
-  const subtituloPeriodo = `${ETIQUETAS_PERIODO[periodo]} · ${etiquetaArea}`;
+  const subtituloPeriodo = rangoPeriodo.desde
+    ? `Periodo abierto: ${formatoRangoPeriodo(rangoPeriodo.desde, rangoPeriodo.hasta)} · ${etiquetaArea}`
+    : "";
 
-  const pctRecaudado = totales.esperado > 0 ? Math.min(100, Math.round((totales.recaudado / totales.esperado) * 100)) : 0;
+  const enlacePagosHoy = `/panel/pagos?pestana=revision&desde=${encodeURIComponent(hoy)}&hasta=${encodeURIComponent(hoy)}`;
 
-  const pestanasConfig = [
-    { id: "pendientes", etiqueta: "Pendientes por cobrar", contador: pendientes.length },
-    { id: "todos", etiqueta: "Todos los pagos", contador: pagos.length },
+  const ETIQUETAS_PERIODO: Record<PeriodoBalance, string> = {
+    dia: "Hoy",
+    semana: "Esta semana",
+    mes: "Este mes",
+    rango: `${rangoHistorico.desde} – ${rangoHistorico.hasta}`,
+  };
+
+  const subtituloHistorico = `${ETIQUETAS_PERIODO[periodo]} · ${etiquetaArea}`;
+
+  /* deep-link para cada fila del drill-down */
+  function enlacePagosFila(fecha: string) {
+    return `/panel/pagos?pestana=revision&desde=${encodeURIComponent(fecha)}&hasta=${encodeURIComponent(fecha)}`;
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Filtros del modal                                                  */
+  /* ---------------------------------------------------------------- */
+  const FILTROS_MODAL: { id: FiltroDrillDown; etiqueta: string }[] = [
+    { id: "todos", etiqueta: "Todos" },
+    { id: "pendiente", etiqueta: "Solo pendiente" },
+    { id: "en_revision", etiqueta: "Solo en revisión" },
+    { id: "con_marcado", etiqueta: "Con marcado" },
+    { id: "sin_marcado", etiqueta: "Sin marcado" },
   ];
 
-  const enlacePagosRevision = `/panel/pagos?pestana=revision&desde=${encodeURIComponent(rango.desde)}&hasta=${encodeURIComponent(rango.hasta)}`;
-
+  /* ---------------------------------------------------------------- */
+  /* Render                                                             */
+  /* ---------------------------------------------------------------- */
   return (
     <div>
+      {/* =========================================================== */}
+      {/* HERO — Periodo contable abierto                              */}
+      {/* =========================================================== */}
       <div className="barra-herramientas">
         <div>
           <h2 style={{ marginBottom: "0.15rem" }}>Balance</h2>
-          <p className="texto-suave" style={{ margin: 0, fontSize: "0.85rem" }}>{subtituloPeriodo}</p>
-        </div>
-        <div className="grupo-filtros">
-          <div className="campo" style={{ marginBottom: 0 }}>
-            <label>Periodo</label>
-            <select value={periodo} onChange={(e) => setPeriodo(e.target.value as PeriodoBalance)}>
-              <option value="dia">Hoy</option>
-              <option value="semana">Esta semana</option>
-              <option value="mes">Este mes</option>
-              <option value="rango">Rango libre</option>
-            </select>
-          </div>
-          {periodo === "rango" && (
-            <>
-              <div className="campo" style={{ marginBottom: 0 }}>
-                <label>Desde</label>
-                <input
-                  type="date"
-                  value={rangoManual.desde}
-                  onChange={(e) => setRangoManual((r) => ({ ...r, desde: e.target.value }))}
-                />
-              </div>
-              <div className="campo" style={{ marginBottom: 0 }}>
-                <label>Hasta</label>
-                <input
-                  type="date"
-                  value={rangoManual.hasta}
-                  onChange={(e) => setRangoManual((r) => ({ ...r, hasta: e.target.value }))}
-                />
-              </div>
-            </>
+          {subtituloPeriodo && (
+            <p className="texto-suave" style={{ margin: 0, fontSize: "0.85rem" }}>
+              {subtituloPeriodo}
+            </p>
           )}
-          <button className="boton boton-secundario" onClick={exportarBalance} disabled={cargando}>
-            Exportar CSV
-          </button>
         </div>
+        <button
+          className="boton boton-secundario"
+          onClick={() => exportarBalance(pagosPeriodo, rangoPeriodo.desde, rangoPeriodo.hasta, "balance_periodo")}
+          disabled={cargandoPeriodo}
+        >
+          Exportar CSV
+        </button>
       </div>
 
-      {/* ---- KPIs ---- */}
-      {cargando ? (
+      {/* KPIs del periodo */}
+      {cargandoPeriodo ? (
         <div className="rejilla-kpi">
+          <SkeletonKpi />
           <SkeletonKpi />
           <SkeletonKpi />
           <SkeletonKpi />
@@ -206,36 +386,45 @@ export default function Dashboard() {
         <div className="rejilla-kpi">
           <div className="tarjeta tarjeta-kpi">
             <div className="etiqueta-kpi">Total a recaudar</div>
-            <div className="valor-kpi">{formatoMoneda(totales.esperado)}</div>
+            <div className="valor-kpi">{formatoMoneda(totalesPeriodo.esperado)}</div>
           </div>
           <div className="tarjeta tarjeta-kpi">
             <div className="etiqueta-kpi">Validado en caja</div>
-            <div className="valor-kpi">{formatoMoneda(totales.recaudado)}</div>
+            <div className="valor-kpi">{formatoMoneda(totalesPeriodo.recaudado)}</div>
           </div>
-          <div className="tarjeta tarjeta-kpi">
-            <div className="etiqueta-kpi">Diferencia</div>
-            <div className={`valor-kpi ${claseDiferencia}`}>{formatoMoneda(totales.diferencia)}</div>
+          <div
+            className="tarjeta tarjeta-kpi tarjeta-kpi--clicable"
+            onClick={() => { setFiltroModal("pendiente"); setModalAbierto(true); }}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === "Enter") { setFiltroModal("pendiente"); setModalAbierto(true); } }}
+          >
+            <div className="etiqueta-kpi">Falta por cobrar</div>
+            <div className={`valor-kpi ${totalesPeriodo.faltaPorCobrar === 0 ? "diferencia-cero" : "diferencia"}`}>
+              {formatoMoneda(totalesPeriodo.faltaPorCobrar)}
+            </div>
           </div>
           <div className="tarjeta tarjeta-kpi tarjeta-kpi--en-revision">
             <div className="etiqueta-kpi">En revisión</div>
             <div className="valor-kpi" style={{ color: "var(--color-advertencia)" }}>
-              {formatoMoneda(totales.enRevision)}
+              {formatoMoneda(totalesPeriodo.enRevision)}
             </div>
-            {totales.enRevision > 0 && (
-              <>
-                <div className="subvalor">
-                  Pendiente de validación administrativa
-                </div>
-                <Link to={enlacePagosRevision} className="enlace-accion" style={{ marginTop: "0.5rem" }}>
-                  Revisar en Pagos →
-                </Link>
-              </>
-            )}
+          </div>
+          <div
+            className="tarjeta tarjeta-kpi tarjeta-kpi--clicable"
+            onClick={() => { setFiltroModal("pendiente"); setModalAbierto(true); }}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === "Enter") { setFiltroModal("pendiente"); setModalAbierto(true); } }}
+          >
+            <div className="etiqueta-kpi">Pendientes</div>
+            <div className="valor-kpi">{totalesPeriodo.pendientes}</div>
           </div>
         </div>
       )}
 
-      {!cargando && totales.esperado > 0 && (
+      {/* Barra de avance */}
+      {!cargandoPeriodo && totalesPeriodo.esperado > 0 && (
         <div className="barra-progreso-recaudo tarjeta">
           <div className="barra-progreso-recaudo__cabecera">
             <span className="texto-suave">Avance del periodo</span>
@@ -247,102 +436,321 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ---- Tabs ---- */}
-      <Tabs pestanas={pestanasConfig} activa={pestana} onChange={(id) => setPestana(id as "pendientes" | "todos")}>
-        {pestana === "pendientes" && (
-          <>
-            {cargando ? (
-              <SkeletonTabla />
-            ) : pendientes.length === 0 ? (
-              <div className="estado-vacio-ilustrado">
-                <span className="icono-vacio">✅</span>
-                <p>No hay pagos pendientes en este periodo.</p>
-                <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
-                  <Link to={enlacePagosRevision} className="enlace-accion">
-                    Ir a Pagos →
-                  </Link>
-                  <Link to="/panel/horario" className="enlace-accion">
-                    Ver Horario →
-                  </Link>
+      {/* =========================================================== */}
+      {/* BLOQUE HOY — Operación diaria compacta                       */}
+      {/* =========================================================== */}
+      {!cargandoPeriodo && (
+        <div className="tarjeta bloque-hoy">
+          <div className="bloque-hoy__titulo">Hoy</div>
+          <div className="bloque-hoy__kpis">
+            <div className="bloque-hoy__kpi">
+              <span className="bloque-hoy__kpi-valor">{totalesHoy.pendientes}</span>
+              <span className="bloque-hoy__kpi-etiqueta">Pendientes</span>
+            </div>
+            <div className="bloque-hoy__kpi">
+              <span className="bloque-hoy__kpi-valor" style={{ color: "var(--color-advertencia)" }}>
+                {totalesHoy.enRevision}
+              </span>
+              <span className="bloque-hoy__kpi-etiqueta">En revisión</span>
+            </div>
+            <div className="bloque-hoy__kpi">
+              <span className="bloque-hoy__kpi-valor" style={{ color: "var(--color-exito)" }}>
+                {totalesHoy.validados}
+              </span>
+              <span className="bloque-hoy__kpi-etiqueta">Validados</span>
+            </div>
+          </div>
+          <Link to={enlacePagosHoy} className="enlace-accion" style={{ marginLeft: "auto" }}>
+            Ir a Pagos →
+          </Link>
+        </div>
+      )}
+
+      {/* =========================================================== */}
+      {/* VISTA HISTÓRICA — colapsable                                  */}
+      {/* =========================================================== */}
+      <details
+        className="vista-historica"
+        open={historicoAbierto}
+        onToggle={(e) => setHistoricoAbierto((e.target as HTMLDetailsElement).open)}
+      >
+        <summary>Vista histórica</summary>
+        <div className="vista-historica__contenido">
+          <div className="barra-herramientas">
+            <p className="texto-suave" style={{ margin: 0, fontSize: "0.85rem" }}>
+              {subtituloHistorico}
+            </p>
+            <div className="grupo-filtros">
+              <div className="campo" style={{ marginBottom: 0 }}>
+                <label>Periodo</label>
+                <select value={periodo} onChange={(e) => setPeriodo(e.target.value as PeriodoBalance)}>
+                  <option value="dia">Hoy</option>
+                  <option value="semana">Esta semana</option>
+                  <option value="mes">Este mes</option>
+                  <option value="rango">Rango libre</option>
+                </select>
+              </div>
+              {periodo === "rango" && (
+                <>
+                  <div className="campo" style={{ marginBottom: 0 }}>
+                    <label>Desde</label>
+                    <input
+                      type="date"
+                      value={rangoManual.desde}
+                      onChange={(e) => setRangoManual((r) => ({ ...r, desde: e.target.value }))}
+                    />
+                  </div>
+                  <div className="campo" style={{ marginBottom: 0 }}>
+                    <label>Hasta</label>
+                    <input
+                      type="date"
+                      value={rangoManual.hasta}
+                      onChange={(e) => setRangoManual((r) => ({ ...r, hasta: e.target.value }))}
+                    />
+                  </div>
+                </>
+              )}
+              <button
+                className="boton boton-secundario"
+                onClick={() => exportarBalance(pagosHistorico, rangoHistorico.desde, rangoHistorico.hasta, "balance")}
+                disabled={cargandoHistorico}
+              >
+                Exportar CSV
+              </button>
+            </div>
+          </div>
+
+          {/* KPIs históricos compactos */}
+          {cargandoHistorico ? (
+            <div className="rejilla-kpi">
+              <SkeletonKpi />
+              <SkeletonKpi />
+              <SkeletonKpi />
+              <SkeletonKpi />
+            </div>
+          ) : (
+            <div className="rejilla-kpi">
+              <div className="tarjeta tarjeta-kpi">
+                <div className="etiqueta-kpi">Total a recaudar</div>
+                <div className="valor-kpi">{formatoMoneda(totalesHistorico.esperado)}</div>
+              </div>
+              <div className="tarjeta tarjeta-kpi">
+                <div className="etiqueta-kpi">Validado en caja</div>
+                <div className="valor-kpi">{formatoMoneda(totalesHistorico.recaudado)}</div>
+              </div>
+              <div className="tarjeta tarjeta-kpi">
+                <div className="etiqueta-kpi">Diferencia</div>
+                <div className={`valor-kpi ${totalesHistorico.diferencia === 0 ? "diferencia-cero" : "diferencia"}`}>
+                  {formatoMoneda(totalesHistorico.diferencia)}
                 </div>
               </div>
-            ) : (
-              <EnvoltorioTabla>
-                <table className="tabla-datos">
-                  <thead>
-                    <tr>
-                      <th>Empleado</th>
-                      <th>Área</th>
-                      <th>Fecha</th>
-                      <th>Estado</th>
-                      <th>Monto</th>
-                      <th>Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pendientes.map((p) => (
-                      <tr key={p.id}>
-                        <td>{p.empleados ? nombreCompletoEmpleado(p.empleados) : "—"}</td>
-                        <td><ChipArea nombre={nombreArea(p.area_id)} /></td>
-                        <td>{formatoFecha(p.fecha)}</td>
-                        <td>
-                          <span className={claseEstadoPago(p.estado)}>{ETIQUETAS_ESTADO_PAGO[p.estado]}</span>
-                        </td>
-                        <td>{formatoMoneda(p.monto_esperado)}</td>
-                        <td>
-                          <Link to={enlacePagosRevision} className="enlace-accion">
-                            {esSupervision ? "Ver en Pagos →" : "Validar →"}
-                          </Link>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </EnvoltorioTabla>
-            )}
-          </>
-        )}
-
-        {pestana === "todos" && (
-          <>
-            {cargando ? (
-              <SkeletonTabla filas={6} />
-            ) : pagos.length === 0 ? (
-              <div className="estado-vacio-ilustrado">
-                <span className="icono-vacio">📋</span>
-                <p>No hay pagos registrados en este periodo.</p>
+              <div className="tarjeta tarjeta-kpi tarjeta-kpi--en-revision">
+                <div className="etiqueta-kpi">En revisión</div>
+                <div className="valor-kpi" style={{ color: "var(--color-advertencia)" }}>
+                  {formatoMoneda(totalesHistorico.enRevision)}
+                </div>
               </div>
-            ) : (
-              <EnvoltorioTabla>
-                <table className="tabla-datos">
-                  <thead>
-                    <tr>
-                      <th>Empleado</th>
-                      <th>Área</th>
-                      <th>Fecha</th>
-                      <th>Estado</th>
-                      <th>Monto</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pagos.map((p) => (
-                      <tr key={p.id}>
-                        <td>{p.empleados ? nombreCompletoEmpleado(p.empleados) : "—"}</td>
-                        <td><ChipArea nombre={nombreArea(p.area_id)} /></td>
-                        <td>{formatoFecha(p.fecha)}</td>
-                        <td>
-                          <span className={claseEstadoPago(p.estado)}>{ETIQUETAS_ESTADO_PAGO[p.estado]}</span>
-                        </td>
-                        <td>{formatoMoneda(p.monto_esperado)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </EnvoltorioTabla>
+            </div>
+          )}
+
+          {/* Tabs del historial */}
+          <Tabs
+            pestanas={[
+              { id: "pendientes", etiqueta: "Pendientes", contador: pendientesHistorico.length },
+              { id: "todos", etiqueta: "Todos", contador: pagosHistorico.length },
+            ]}
+            activa={pestanaHistorico}
+            onChange={(id) => setPestanaHistorico(id as "pendientes" | "todos")}
+          >
+            {pestanaHistorico === "pendientes" && (
+              <>
+                {cargandoHistorico ? (
+                  <SkeletonTabla />
+                ) : pendientesHistorico.length === 0 ? (
+                  <div className="estado-vacio-ilustrado">
+                    <span className="icono-vacio">✅</span>
+                    <p>No hay pagos pendientes en este periodo.</p>
+                  </div>
+                ) : (
+                  <TablaResumen pagos={pendientesHistorico} nombreArea={nombreArea} esSupervision={esSupervision} rango={rangoHistorico} />
+                )}
+              </>
             )}
-          </>
-        )}
-      </Tabs>
+            {pestanaHistorico === "todos" && (
+              <>
+                {cargandoHistorico ? (
+                  <SkeletonTabla filas={6} />
+                ) : pagosHistorico.length === 0 ? (
+                  <div className="estado-vacio-ilustrado">
+                    <span className="icono-vacio">📋</span>
+                    <p>No hay pagos registrados en este periodo.</p>
+                  </div>
+                ) : (
+                  <TablaResumen pagos={pagosHistorico} nombreArea={nombreArea} esSupervision={esSupervision} rango={rangoHistorico} soloLectura />
+                )}
+              </>
+            )}
+          </Tabs>
+        </div>
+      </details>
+
+      {/* =========================================================== */}
+      {/* MODAL DRILL-DOWN — Detalle de adeudos del periodo             */}
+      {/* =========================================================== */}
+      {modalAbierto && (
+        <Modal
+          titulo="Detalle de adeudos del periodo"
+          onCerrar={() => setModalAbierto(false)}
+          extraAncho
+        >
+          <p className="texto-suave" style={{ margin: "0 0 0.75rem", fontSize: "0.85rem" }}>
+            {subtituloPeriodo} · {pagosDrillDownFiltrados.length} registros
+          </p>
+
+          {/* Filtros rápidos */}
+          <div className="filtros-rapidos">
+            {FILTROS_MODAL.map((f) => (
+              <button
+                key={f.id}
+                className={`filtro-chip ${filtroModal === f.id ? "filtro-chip--activo" : ""}`}
+                onClick={() => setFiltroModal(f.id)}
+              >
+                {f.etiqueta}
+              </button>
+            ))}
+          </div>
+
+          {pagosDrillDownFiltrados.length === 0 ? (
+            <div className="estado-vacio-ilustrado">
+              <span className="icono-vacio">✅</span>
+              <p>No hay registros con este filtro.</p>
+            </div>
+          ) : (
+            <EnvoltorioTabla>
+              <table className="tabla-datos">
+                <thead>
+                  <tr>
+                    <th>Empleado</th>
+                    <th>Área</th>
+                    <th>Fecha cuota</th>
+                    <th>Monto</th>
+                    <th>Estado</th>
+                    <th>Marcado empleado</th>
+                    <th>Validado</th>
+                    <th>Notas / Motivo</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pagosDrillDownFiltrados.map((p) => (
+                    <tr key={p.id}>
+                      <td>{p.empleados ? nombreCompletoEmpleado(p.empleados) : "—"}</td>
+                      <td><ChipArea nombre={nombreArea(p.area_id)} /></td>
+                      <td>{formatoFecha(p.fecha)}</td>
+                      <td>{formatoMoneda(p.monto_esperado)}</td>
+                      <td>
+                        <span className={claseEstadoPago(p.estado)}>
+                          {ETIQUETAS_ESTADO_PAGO[p.estado]}
+                        </span>
+                      </td>
+                      <td>
+                        {p.marcado_por_empleado ? (
+                          <span>
+                            Sí
+                            <br />
+                            <span className="texto-suave" style={{ fontSize: "0.78rem" }}>
+                              {formatoFechaHora(p.marcado_empleado_en)}
+                            </span>
+                          </span>
+                        ) : (
+                          "No"
+                        )}
+                      </td>
+                      <td>
+                        {p.validado ? (
+                          <span>
+                            Sí
+                            <br />
+                            <span className="texto-suave" style={{ fontSize: "0.78rem" }}>
+                              {formatoFechaHora(p.validado_en)}
+                            </span>
+                          </span>
+                        ) : (
+                          "No"
+                        )}
+                      </td>
+                      <td style={{ maxWidth: "180px", fontSize: "0.82rem" }}>
+                        {p.motivo_reversion || p.notas || "—"}
+                      </td>
+                      <td>
+                        <Link to={enlacePagosFila(p.fecha)} className="enlace-accion" style={{ fontSize: "0.82rem" }}>
+                          {esSupervision ? "Ver →" : "Validar →"}
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </EnvoltorioTabla>
+          )}
+        </Modal>
+      )}
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Tabla resumen reutilizable para vista histórica                      */
+/* ------------------------------------------------------------------ */
+function TablaResumen({
+  pagos,
+  nombreArea,
+  esSupervision,
+  rango,
+  soloLectura,
+}: {
+  pagos: PagoCuota[];
+  nombreArea: (id: string) => string;
+  esSupervision: boolean;
+  rango: { desde: string; hasta: string };
+  soloLectura?: boolean;
+}) {
+  const enlace = `/panel/pagos?pestana=revision&desde=${encodeURIComponent(rango.desde)}&hasta=${encodeURIComponent(rango.hasta)}`;
+
+  return (
+    <EnvoltorioTabla>
+      <table className="tabla-datos">
+        <thead>
+          <tr>
+            <th>Empleado</th>
+            <th>Área</th>
+            <th>Fecha</th>
+            <th>Estado</th>
+            <th>Monto</th>
+            {!soloLectura && <th>Acciones</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {pagos.map((p) => (
+            <tr key={p.id}>
+              <td>{p.empleados ? nombreCompletoEmpleado(p.empleados) : "—"}</td>
+              <td><ChipArea nombre={nombreArea(p.area_id)} /></td>
+              <td>{formatoFecha(p.fecha)}</td>
+              <td>
+                <span className={claseEstadoPago(p.estado)}>{ETIQUETAS_ESTADO_PAGO[p.estado]}</span>
+              </td>
+              <td>{formatoMoneda(p.monto_esperado)}</td>
+              {!soloLectura && (
+                <td>
+                  <Link to={enlace} className="enlace-accion">
+                    {esSupervision ? "Ver en Pagos →" : "Validar →"}
+                  </Link>
+                </td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </EnvoltorioTabla>
   );
 }

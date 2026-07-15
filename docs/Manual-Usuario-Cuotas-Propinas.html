@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Manual de Usuario — Cuotas de Propinas</title>
+  <style>
+    @page { margin: 22mm 18mm; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", Calibri, Arial, sans-serif;
+      font-size: 11pt;
+      line-height: 1.55;
+      color: #1a1a1a;
+      max-width: 780px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+    h1 { font-size: 26pt; color: #0f3d6e; margin-bottom: 0.2em; }
+    h2 { font-size: 16pt; color: #0f3d6e; border-bottom: 2px solid #dbeafe; padding-bottom: 0.25em; margin-top: 1.8em; page-break-after: avoid; }
+    h3 { font-size: 13pt; color: #1e40af; margin-top: 1.3em; page-break-after: avoid; }
+    h4 { font-size: 11.5pt; margin-top: 1em; }
+    .portada { text-align: center; padding: 120px 20px 80px; page-break-after: always; }
+    .portada .sub { font-size: 14pt; color: #475569; margin-top: 0.5em; }
+    .portada .meta { margin-top: 2.5em; font-size: 10.5pt; color: #64748b; }
+    .portada .url { font-size: 12pt; color: #0f3d6e; font-weight: 600; margin-top: 1em; }
+    table { width: 100%; border-collapse: collapse; margin: 0.8em 0 1.2em; font-size: 10pt; }
+    th, td { border: 1px solid #cbd5e1; padding: 8px 10px; text-align: left; vertical-align: top; }
+    th { background: #eff6ff; color: #1e3a5f; font-weight: 600; }
+    tr:nth-child(even) td { background: #f8fafc; }
+    pre.flow {
+      background: #f1f5f9;
+      border-left: 4px solid #3b82f6;
+      padding: 14px 16px;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 9.5pt;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    blockquote {
+      margin: 1em 0;
+      padding: 10px 14px;
+      background: #fffbeb;
+      border-left: 4px solid #f59e0b;
+      color: #78350f;
+      font-size: 10.5pt;
+    }
+    ul, ol { margin: 0.4em 0 1em; padding-left: 1.4em; }
+    li { margin-bottom: 0.35em; }
+    .pie { margin-top: 3em; text-align: center; font-size: 9.5pt; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 1em; }
+    .nota { font-size: 10pt; color: #475569; font-style: italic; }
+    strong { color: #0f172a; }
+  </style>
+</head>
+<body>
+
+<section class="portada">
+  <h1>Manual de Usuario</h1>
+  <p class="sub">Sistema de Seguimiento de Cuotas de Propinas</p>
+  <p class="meta">Versión 1.0 · Julio 2026</p>
+  <p class="url">https://orusuko.github.io/CinemaQ/</p>
+  <p class="nota" style="margin-top: 2em;">Para empleados y administradores de área (Comanderos y Corredores).<br/>No incluye funciones del administrador general del sistema.</p>
+</section>
+
+<h2>1. ¿Qué es este sistema?</h2>
+<p>El <strong>Sistema de Cuotas de Propinas</strong> registra el pago diario de la cuota fija que aportan los empleados de <strong>Comanderos</strong> y <strong>Corredores</strong>. Funciona con <strong>doble verificación</strong>:</p>
+<ol>
+  <li>El <strong>empleado</strong> marca en la página pública que ya pagó.</li>
+  <li>Un <strong>administrador de área</strong> revisa y <strong>valida</strong> el pago en caja.</li>
+</ol>
+
+<h3>Roles cubiertos en este manual</h3>
+<table>
+  <tr><th>Rol</th><th>¿Quién es?</th><th>Qué hace</th></tr>
+  <tr><td><strong>Empleado</strong></td><td>Personal operativo</td><td>Marca su pago del día en la web pública (sin contraseña).</td></tr>
+  <tr><td><strong>Administrador de área</strong></td><td>Encargado de Comanderos o Corredores</td><td>Registra horario y asistencia, valida pagos y consulta el balance de su área.</td></tr>
+</table>
+<blockquote>Existen otros perfiles (supervisión y administrador general) con permisos adicionales. Este manual <strong>no</strong> los describe.</blockquote>
+
+<h2>2. Flujo del día (resumen)</h2>
+<pre class="flow">  MAÑANA / PREPARACIÓN          DURANTE EL TURNO              CIERRE DEL DÍA
+  ───────────────────          ─────────────────             ────────────────
+  1. Horario del día      →    2. Asistencia registrada  →   4. Empleado marca
+     (quién trabaja)            (obligación de pago)          "Ya pagué"
+                                                          →   5. Admin valida
+                                                                en Pagos
+                                                          →   6. Balance muestra
+                                                                avance del día</pre>
+
+<p><strong>Orden recomendado para el administrador de área:</strong></p>
+<ol>
+  <li><strong>Horario</strong> — indicar quién está enrolado hoy.</li>
+  <li><strong>Asistencia</strong> — confirmar asistencia (genera la cuota del día).</li>
+  <li><strong>Pagos</strong> — validar lo que los empleados marcaron como pagado.</li>
+  <li><strong>Balance</strong> — revisar totales y pendientes.</li>
+</ol>
+
+<h2>3. Parte I — Guía para empleados</h2>
+
+<h3>3.1 Acceso</h3>
+<ol>
+  <li>Abre en el navegador: <strong>https://orusuko.github.io/CinemaQ/</strong></li>
+  <li><strong>No necesitas usuario ni contraseña</strong> para marcar tu pago.</li>
+  <li>La hora del sistema es <strong>Ciudad de México (CDMX)</strong>.</li>
+</ol>
+
+<h3>3.2 Marcar que ya pagaste</h3>
+<ol>
+  <li>En la pantalla principal verás: <strong>«¿Ya pagaste tu cuota de hoy?»</strong></li>
+  <li>Escribe tu <strong>número de empleado</strong> o tu <strong>nombre</strong>.</li>
+  <li>Elige tu registro en la lista (muestra área: Comanderos o Corredores).</li>
+  <li>Pulsa <strong>«Ya pagué»</strong>.</li>
+  <li>Si todo salió bien, verás un mensaje de confirmación.</li>
+</ol>
+
+<h3>3.3 Qué pasa después de marcar</h3>
+<table>
+  <tr><th>Paso</th><th>Significado</th></tr>
+  <tr><td>Tú marcas «Ya pagué»</td><td>El pago queda <strong>en revisión</strong>; aún no cuenta como validado en caja.</td></tr>
+  <tr><td>El administrador valida</td><td>El pago pasa a <strong>Validado</strong> y suma al recaudo del día.</td></tr>
+  <tr><td>El administrador rechaza</td><td>Vuelves a <strong>Pendiente</strong> y puedes marcar de nuevo si corresponde.</td></tr>
+</table>
+
+<h3>3.4 Ventana horaria</h3>
+<p>El sistema puede rechazar marcas fuera del horario permitido (cierre a las <strong>23:30 hora CDMX</strong>). Si ves un error, contacta a tu administrador de área.</p>
+
+<h3>3.5 Consejos</h3>
+<ul>
+  <li>Verifica que elegiste <strong>tu nombre correcto</strong> antes de pulsar «Ya pagué».</li>
+  <li>Si te equivocaste, <strong>avisa de inmediato</strong> al administrador de tu área.</li>
+  <li>Marcar en la app <strong>no sustituye</strong> entregar el dinero en caja; solo es el registro digital.</li>
+</ul>
+
+<h2>4. Parte II — Guía para administradores de área</h2>
+
+<h3>4.1 Acceso al panel</h3>
+<ol>
+  <li>Entra a <strong>https://orusuko.github.io/CinemaQ/</strong></li>
+  <li>Pulsa <strong>«Iniciar sesión»</strong>.</li>
+  <li>Escribe tu <strong>usuario</strong> y <strong>contraseña</strong>.</li>
+  <li>Tras ingresar llegarás al <strong>Balance</strong>.</li>
+</ol>
+<p>Para salir: menú lateral → <strong>Cerrar sesión</strong>. En celular, abre el menú con el icono ☰.</p>
+<p>Solo verás datos de <strong>tu área</strong> (Comanderos o Corredores).</p>
+
+<h3>4.2 Menú del panel</h3>
+<table>
+  <tr><th>Grupo</th><th>Pantallas</th><th>Uso</th></tr>
+  <tr><td>Operación diaria</td><td>Balance, Horario, Asistencia, Pagos</td><td>Trabajo del día a día</td></tr>
+  <tr><td>Personal</td><td>Empleados, Solicitudes de área</td><td>Catálogo y movimientos de personal</td></tr>
+  <tr><td>Administración</td><td>Cierres de periodo</td><td>Consultar cortes contables ya realizados</td></tr>
+  <tr><td>Cuenta</td><td>Notificaciones, Mi cuenta</td><td>Avisos y cambio de contraseña</td></tr>
+</table>
+
+<h3>4.3 Horario del día</h3>
+<p><strong>Para qué sirve:</strong> definir qué empleados están <strong>enrolados</strong> para la fecha seleccionada.</p>
+<ol>
+  <li>Ve a <strong>Horario</strong> y confirma la fecha.</li>
+  <li>Usa <strong>Agregar</strong> o <strong>Quitar</strong> por empleado, o selecciona varios y usa <strong>Registrar asistencia de seleccionados</strong>.</li>
+</ol>
+
+<h3>4.4 Asistencia</h3>
+<p><strong>Para qué sirve:</strong> registrar quién asistió; al hacerlo se <strong>genera la obligación de pago</strong> del día.</p>
+<ol>
+  <li>Ve a <strong>Asistencia</strong> y elige la fecha (hasta 7 días atrás).</li>
+  <li>Agrega empleados con el desplegable si hace falta.</li>
+  <li>La tabla muestra el estado del pago vinculado.</li>
+</ol>
+<p><strong>Eliminar asistencia:</strong> requiere motivo. Tras eliminar aparece opción <strong>Revertir</strong> por unos segundos.</p>
+
+<h3>4.5 Pagos</h3>
+<p><strong>Para qué sirve:</strong> validar en caja los pagos pendientes o marcados por empleados.</p>
+<h4>Pestaña «Pendientes y en revisión»</h4>
+<table>
+  <tr><th>Estado</th><th>Significado</th><th>Acciones</th></tr>
+  <tr><td>Pendiente</td><td>Debe pagar; no marcó o fue rechazado</td><td>Validar, Eliminar</td></tr>
+  <tr><td>En revisión</td><td>El empleado pulsó «Ya pagué»</td><td>Validar, Rechazar, Eliminar</td></tr>
+</table>
+<p><strong>Registrar pago manual:</strong> para casos excepcionales cuando no existe ya un pago activo para ese día.</p>
+<h4>Pestaña «Validados»</h4>
+<p>Pagos confirmados. Puedes <strong>Revertir</strong> (requiere motivo) o <strong>Eliminar</strong> si hubo error.</p>
+
+<h3>4.6 Balance</h3>
+<table>
+  <tr><th>Indicador</th><th>Significado</th></tr>
+  <tr><td>Total a recaudar</td><td>Cuotas esperadas del periodo</td></tr>
+  <tr><td>Validado en caja</td><td>Dinero ya confirmado</td></tr>
+  <tr><td>Diferencia</td><td>Lo que falta por validar</td></tr>
+  <tr><td>En revisión</td><td>Marcado por empleados, pendiente de validación</td></tr>
+</table>
+<p>Filtros: Hoy, Esta semana, Este mes o Rango libre. Puedes <strong>Exportar CSV</strong> y usar enlaces <strong>Validar →</strong> desde pendientes.</p>
+
+<h3>4.7 Empleados</h3>
+<table>
+  <tr><th>Acción</th><th>Descripción</th></tr>
+  <tr><td>Nuevo empleado</td><td>Registrar personal en tu área</td></tr>
+  <tr><td>Cambiar estado</td><td>Activar o desactivar</td></tr>
+  <tr><td>Solicitar a mi área</td><td>Pedir incorporar empleado de la otra área</td></tr>
+</table>
+
+<h3>4.8 Solicitudes de área</h3>
+<p>Consulta el estado de pedidos de cambio de área. La aprobación la realiza el administrador general.</p>
+
+<h3>4.9 Cierres de periodo</h3>
+<p>Consulta cortes contables ya realizados y <strong>Descargar CSV</strong>. Crear cierres nuevos es función del administrador general.</p>
+
+<h3>4.10 Notificaciones y Mi cuenta</h3>
+<p><strong>Notificaciones:</strong> icono de campana; marca como leídas cuando las revises.</p>
+<p><strong>Mi cuenta:</strong> cambiar contraseña (mínimo 8 caracteres).</p>
+
+<h2>5. Estados del pago (glosario)</h2>
+<table>
+  <tr><th>Estado</th><th>Significado</th></tr>
+  <tr><td>Pendiente</td><td>Debe pagar; no ha marcado o puede volver a marcar</td></tr>
+  <tr><td>En revisión</td><td>El empleado indicó que pagó; falta validación</td></tr>
+  <tr><td>Validado</td><td>Pago confirmado en caja</td></tr>
+  <tr><td>Cancelado</td><td>Obligación anulada</td></tr>
+</table>
+
+<h2>6. Preguntas frecuentes</h2>
+<p><strong>¿El empleado necesita instalar algo?</strong> No. Solo un navegador con internet.</p>
+<p><strong>¿Puedo validar aunque no haya marcado «Ya pagué»?</strong> Sí, desde Pagos en estado Pendiente.</p>
+<p><strong>¿Funciona en el teléfono?</strong> Sí. Usa el menú ☰ en el panel.</p>
+<p><strong>¿Qué pasa si olvido registrar asistencia?</strong> No se genera la cuota del día; regístrala en Asistencia primero.</p>
+
+<h2>7. Soporte</h2>
+<p>Usuario, contraseña, montos de cuota y errores técnicos: contacta al <strong>administrador general</strong>.</p>
+<p><strong>URL:</strong> https://orusuko.github.io/CinemaQ/</p>
+
+<p class="pie">Fin del manual · Sistema de Cuotas de Propinas · Julio 2026</p>
+
+</body>
+</html>

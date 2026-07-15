@@ -512,6 +512,146 @@ table.tabla-datos tbody tr:hover {
   max-width: 720px;
 }
 
+.caja-modal.extra-ancho {
+  max-width: 960px;
+}
+
+/* ---------------------------------------------------------------------- */
+/* KPI clicable (Balance drill-down)                                       */
+/* ---------------------------------------------------------------------- */
+.tarjeta-kpi--clicable {
+  cursor: pointer;
+  transition: box-shadow var(--transicion), border-color var(--transicion), transform var(--transicion);
+}
+
+.tarjeta-kpi--clicable:hover {
+  border-color: var(--color-primario);
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.13);
+  transform: translateY(-1px);
+}
+
+.tarjeta-kpi--clicable .etiqueta-kpi {
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 3px;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Bloque compacto «Hoy» (Dashboard)                                       */
+/* ---------------------------------------------------------------------- */
+.bloque-hoy {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  padding: 1rem 1.3rem;
+  margin-bottom: 1.2rem;
+}
+
+.bloque-hoy__titulo {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--color-texto-suave);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.bloque-hoy__kpis {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.bloque-hoy__kpi {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+}
+
+.bloque-hoy__kpi-valor {
+  font-family: "Fira Code", monospace;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.bloque-hoy__kpi-etiqueta {
+  font-size: 0.72rem;
+  color: var(--color-texto-suave);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Filtros rápidos (chips) — modal drill-down                              */
+/* ---------------------------------------------------------------------- */
+.filtros-rapidos {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.filtro-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--color-borde);
+  border-radius: 999px;
+  background: var(--color-superficie);
+  color: var(--color-texto-suave);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color var(--transicion), border-color var(--transicion), color var(--transicion);
+  white-space: nowrap;
+}
+
+.filtro-chip:hover {
+  border-color: var(--color-primario);
+  color: var(--color-primario);
+}
+
+.filtro-chip--activo {
+  background: rgba(37, 99, 235, 0.1);
+  border-color: var(--color-primario);
+  color: var(--color-primario);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Vista histórica colapsable (Dashboard)                                  */
+/* ---------------------------------------------------------------------- */
+.vista-historica {
+  margin-top: 0.5rem;
+}
+
+.vista-historica summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.92rem;
+  color: var(--color-texto-suave);
+  padding: 0.6rem 0;
+  user-select: none;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.vista-historica summary::before {
+  content: "▸";
+  transition: transform var(--transicion);
+}
+
+.vista-historica[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.vista-historica__contenido {
+  padding-top: 0.75rem;
+}
+
 .encabezado-modal {
   display: flex;
   justify-content: space-between;
