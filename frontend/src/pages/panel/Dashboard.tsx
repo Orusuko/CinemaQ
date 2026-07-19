@@ -529,14 +529,10 @@ export default function Dashboard() {
               {formatoMoneda(totalesPeriodo.enRevision)}
             </div>
           </div>
-          <div className="tarjeta tarjeta-kpi">
-            <div className="etiqueta-kpi">Avance del periodo</div>
-            <div className="valor-kpi">{pctRecaudado}%</div>
-          </div>
         </div>
       )}
 
-      {/* Barra de avance */}
+      {/* Barra de avance (incluye el %) */}
       {!cargandoPeriodo && totalesPeriodo.esperado > 0 && (
         <div className="barra-progreso-recaudo tarjeta">
           <div className="barra-progreso-recaudo__cabecera">
@@ -750,7 +746,7 @@ export default function Dashboard() {
 
           {pagosDrillDownFiltrados.length === 0 ? (
             <div className="estado-vacio-ilustrado">
-              <span className="icono-vacio">✅</span>
+              <span className="icono-vacio"><IconoCheck width={32} height={32} /></span>
               <p>No hay registros con este filtro.</p>
             </div>
           ) : (

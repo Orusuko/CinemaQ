@@ -28,7 +28,15 @@ export default function Solicitudes() {
   const [accion, setAccion] = useState<{ solicitud: SolicitudCambioArea; aprobar: boolean } | null>(null);
 
   const esAdminGeneral = perfil?.rol === "administrador_general";
-  const solicitudResaltada = searchParams.get("solicitud");
+  const solicitudResaltadaUrl = searchParams.get("solicitud");
+  const [solicitudResaltada, setSolicitudResaltada] = useState<string | null>(solicitudResaltadaUrl);
+
+  useEffect(() => {
+    setSolicitudResaltada(solicitudResaltadaUrl);
+    if (!solicitudResaltadaUrl) return;
+    const t = window.setTimeout(() => setSolicitudResaltada(null), 4000);
+    return () => window.clearTimeout(t);
+  }, [solicitudResaltadaUrl]);
 
   async function cargar() {
     setCargando(true);
@@ -51,10 +59,10 @@ export default function Solicitudes() {
   }, []);
 
   useEffect(() => {
-    if (!solicitudResaltada || cargando) return;
-    const fila = document.getElementById(`solicitud-${solicitudResaltada}`);
+    if (!solicitudResaltadaUrl || cargando) return;
+    const fila = document.getElementById(`solicitud-${solicitudResaltadaUrl}`);
     fila?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, [solicitudResaltada, cargando, solicitudes]);
+  }, [solicitudResaltadaUrl, cargando, solicitudes]);
 
   function nombreArea(id: string) {
     return areas.find((a) => a.id === id)?.nombre ?? "—";

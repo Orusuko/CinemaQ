@@ -57,12 +57,23 @@ export default function Notificaciones() {
     if (noLeidas.length === 0) return;
     setProcesando(true);
     try {
-      await Promise.all(
-        noLeidas.map((n) => llamarRpc("marcar_notificacion_leida", { p_notificacion_id: n.id })),
-      );
-      setNotificaciones((prev) => prev.map((n) => ({ ...n, leida: true })));
+      /* Sin RPC batch en servidor: lotes de 8 para no saturar. */
+      const TAM_LOTE = 8;
+      let errores = 0;
+      for (let i = 0; i < noLeidas.length; i += TAM_LOTE) {
+        const lote = noLeidas.slice(i, i + TAM_LOTE);
+        const resultados = await Promise.allSettled(
+          lote.map((n) => llamarRpc("marcar_notificacion_leida", { p_notificacion_id: n.id })),
+        );
+        errores += resultados.filter((r) => r.status === "rejected").length;
+      }
+      await cargar();
       avisarNotificacionesActualizadas();
-      mostrarToast("Todas las notificaciones se marcaron como leídas.", "exito");
+      if (errores === 0) {
+        mostrarToast("Todas las notificaciones se marcaron como leídas.", "exito");
+      } else {
+        mostrarToast(`Se marcaron con ${errores} error(es). Revisa las que siguen como nuevas.`, "info");
+      }
     } catch (e) {
       mostrarToast(e instanceof Error ? e.message : "No se pudieron marcar como leídas.", "error");
       await cargar();

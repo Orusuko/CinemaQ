@@ -4,11 +4,12 @@ import { useAuth } from "../../context/AuthContext";
 import { useArea } from "../../context/AreaContext";
 import { useToast } from "../../context/ToastContext";
 import { llamarRpc } from "../../lib/rpc";
-import { fechaHoyInputCdmx, nombreCompletoEmpleado } from "../../lib/formato";
+import { fechaHoyInputCdmx, nombreCompletoEmpleado, nombrePublicoEmpleado } from "../../lib/formato";
 import { mensajeErrorConsulta } from "../../lib/consulta";
 import EnvoltorioTabla from "../../components/EnvoltorioTabla";
 import ChipArea from "../../components/ChipArea";
 import { IconoCheck } from "../../components/Iconos";
+import { abrirCineConEmpleados } from "../../lib/cineHorarios";
 import type { Empleado, HorarioDiario, RespuestaRpc } from "../../lib/tipos";
 
 export default function Horario() {
@@ -22,7 +23,8 @@ export default function Horario() {
   const [idsConAsistencia, setIdsConAsistencia] = useState<Set<string>>(new Set());
   const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
   const [cargando, setCargando] = useState(true);
-  const [procesando, setProcesando] = useState(false);
+  const [procesandoId, setProcesandoId] = useState<string | null>(null);
+  const [procesandoLote, setProcesandoLote] = useState(false);
 
   const areaUnica = areaIdsFiltro && areaIdsFiltro.length === 1 ? areaIdsFiltro[0] : null;
 
@@ -114,7 +116,7 @@ export default function Horario() {
     pendientesConfirmacion.every((e) => seleccionados.has(e.id));
 
   async function agregarAlHorario(empleadoId: string) {
-    setProcesando(true);
+    setProcesandoId(empleadoId);
     try {
       await llamarRpc("registrar_horario", { p_empleado_id: empleadoId, p_fecha: fecha });
       setSeleccionados((prev) => new Set(prev).add(empleadoId));
@@ -123,13 +125,13 @@ export default function Horario() {
     } catch (e) {
       mostrarToast(e instanceof Error ? e.message : "Ocurrió un error.", "error");
     } finally {
-      setProcesando(false);
+      setProcesandoId(null);
     }
   }
 
   async function quitarDelHorario(empleadoId: string) {
     if (idsConAsistencia.has(empleadoId)) return;
-    setProcesando(true);
+    setProcesandoId(empleadoId);
     try {
       await llamarRpc("quitar_horario", { p_empleado_id: empleadoId, p_fecha: fecha });
       setSeleccionados((prev) => {
@@ -142,7 +144,7 @@ export default function Horario() {
     } catch (e) {
       mostrarToast(e instanceof Error ? e.message : "Ocurrió un error.", "error");
     } finally {
-      setProcesando(false);
+      setProcesandoId(null);
     }
   }
 
@@ -167,7 +169,7 @@ export default function Horario() {
   async function registrarAsistenciaDeSeleccionados() {
     const ids = Array.from(seleccionados).filter((id) => !idsConAsistencia.has(id));
     if (ids.length === 0) return;
-    setProcesando(true);
+    setProcesandoLote(true);
     try {
       const respuesta = await llamarRpc<RespuestaRpc & { registrados: number; errores: unknown[] }>(
         "registrar_asistencia_desde_horario",
@@ -179,7 +181,7 @@ export default function Horario() {
     } catch (e) {
       mostrarToast(e instanceof Error ? e.message : "Ocurrió un error.", "error");
     } finally {
-      setProcesando(false);
+      setProcesandoLote(false);
     }
   }
 
@@ -188,6 +190,28 @@ export default function Horario() {
   }
 
   const hayPendientes = pendientesConfirmacion.length > 0;
+
+  function generarHorarioDescansos() {
+    const nombreAreaActiva = areaUnica
+      ? nombreArea(areaUnica)
+      : "Ambas áreas";
+    const resultado = abrirCineConEmpleados({
+      source: "cinemaquote",
+      version: 1,
+      fecha,
+      area: nombreAreaActiva,
+      empleados: empleadosEnHorario.map((e) => ({
+        numero: e.numero_empleado,
+        nombre: nombrePublicoEmpleado(e),
+        area: nombreArea(e.area_id),
+      })),
+    });
+    if (!resultado.ok) {
+      mostrarToast(resultado.motivo, "error");
+      return;
+    }
+    mostrarToast("Se abrió el generador de descansos con los empleados enrolados.", "exito");
+  }
 
   return (
     <div>
@@ -203,6 +227,17 @@ export default function Horario() {
             <label>Fecha</label>
             <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
           </div>
+          {!esSupervision && (
+            <button
+              type="button"
+              className="boton boton-secundario"
+              disabled={empleadosEnHorario.length === 0 || cargando}
+              onClick={generarHorarioDescansos}
+              title="Abre el generador de descansos con estos nombres precargados"
+            >
+              Generar horario de descansos ({empleadosEnHorario.length})
+            </button>
+          )}
         </div>
       </div>
 
@@ -253,9 +288,9 @@ export default function Horario() {
                       <button
                         className="boton boton-chico boton-primario"
                         onClick={() => agregarAlHorario(e.id)}
-                        disabled={!areaUnica || procesando}
+                        disabled={!areaUnica || procesandoId === e.id || procesandoLote}
                       >
-                        Agregar
+                        {procesandoId === e.id ? "…" : "Agregar"}
                       </button>
                     </td>
                   )}
@@ -294,16 +329,16 @@ export default function Horario() {
                 type="button"
                 className="boton boton-secundario"
                 onClick={alternarSeleccionTodos}
-                disabled={procesando || !hayPendientes}
+                disabled={procesandoLote || !hayPendientes}
               >
                 {todosPendientesSeleccionados ? "Quitar selección" : "Seleccionar todos"}
               </button>
               <button
                 className="boton boton-primario"
-                disabled={seleccionados.size === 0 || procesando || !hayPendientes}
+                disabled={seleccionados.size === 0 || procesandoLote || !hayPendientes}
                 onClick={registrarAsistenciaDeSeleccionados}
               >
-                Registrar asistencia ({seleccionados.size})
+                {procesandoLote ? "Registrando…" : `Registrar asistencia (${seleccionados.size})`}
               </button>
             </div>
           )}
@@ -361,14 +396,14 @@ export default function Horario() {
                         <button
                           className="boton boton-chico boton-secundario"
                           onClick={() => quitarDelHorario(e.id)}
-                          disabled={!areaUnica || procesando || yaRegistrada}
+                          disabled={!areaUnica || procesandoId === e.id || procesandoLote || yaRegistrada}
                           title={
                             yaRegistrada
                               ? "No se puede quitar del horario: ya tiene asistencia. Elimínala primero en Asistencia."
                               : undefined
                           }
                         >
-                          Quitar
+                          {procesandoId === e.id ? "…" : "Quitar"}
                         </button>
                       </td>
                     )}

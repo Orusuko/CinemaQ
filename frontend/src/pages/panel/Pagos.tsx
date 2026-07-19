@@ -12,6 +12,7 @@ import Modal from "../../components/Modal";
 import EnvoltorioTabla from "../../components/EnvoltorioTabla";
 import Tabs from "../../components/Tabs";
 import ChipArea from "../../components/ChipArea";
+import { IconoCheck, IconoLista } from "../../components/Iconos";
 import type { Empleado, PagoCuota, RespuestaRpc } from "../../lib/tipos";
 
 /* ------------------------------------------------------------------ */
@@ -47,7 +48,15 @@ export default function Pagos() {
   const [aEliminar, setAEliminar] = useState<PagoCuota | null>(null);
   const [mostrarManual, setMostrarManual] = useState(false);
   const [pestana, setPestana] = useState<"revision" | "validados">("revision");
-  const pagoResaltado = searchParams.get("pago");
+  const pagoResaltadoUrl = searchParams.get("pago");
+  const [pagoResaltado, setPagoResaltado] = useState<string | null>(pagoResaltadoUrl);
+
+  useEffect(() => {
+    setPagoResaltado(pagoResaltadoUrl);
+    if (!pagoResaltadoUrl) return;
+    const t = window.setTimeout(() => setPagoResaltado(null), 4000);
+    return () => window.clearTimeout(t);
+  }, [pagoResaltadoUrl]);
 
   async function cargar() {
     setCargando(true);
@@ -90,13 +99,13 @@ export default function Pagos() {
 
   /* Deep-link desde notificaciones: ?pago=uuid (completa fecha/pestaña si faltan) */
   useEffect(() => {
-    if (!pagoResaltado) return;
+    if (!pagoResaltadoUrl) return;
     let cancelado = false;
     async function resolverPago() {
       const { data } = await supabase
         .from("pagos_cuota")
         .select("fecha, estado")
-        .eq("id", pagoResaltado)
+        .eq("id", pagoResaltadoUrl)
         .maybeSingle();
       if (cancelado || !data) return;
       if (!esFechaIsoValida(searchParams.get("desde")) || !esFechaIsoValida(searchParams.get("hasta"))) {
@@ -111,15 +120,15 @@ export default function Pagos() {
     return () => {
       cancelado = true;
     };
-  }, [pagoResaltado, searchParams]);
+  }, [pagoResaltadoUrl, searchParams]);
 
   useEffect(() => {
-    if (!pagoResaltado || cargando) return;
-    const fila = document.getElementById(`pago-${pagoResaltado}`);
+    if (!pagoResaltadoUrl || cargando) return;
+    const fila = document.getElementById(`pago-${pagoResaltadoUrl}`);
     if (fila) {
       fila.scrollIntoView({ behavior: "smooth", block: "center" });
     }
-  }, [pagoResaltado, cargando, pagos, pestana]);
+  }, [pagoResaltadoUrl, cargando, pagos, pestana]);
 
   const enRevisionYPendientes = useMemo(
     () => pagos.filter((p) => p.estado === "pendiente" || p.estado === "marcado_pendiente_validacion"),
@@ -241,7 +250,7 @@ export default function Pagos() {
               <SkeletonTabla />
             ) : enRevisionYPendientes.length === 0 ? (
               <div className="estado-vacio-ilustrado">
-                <span className="icono-vacio">✅</span>
+                <span className="icono-vacio"><IconoCheck width={32} height={32} /></span>
                 <p>No hay pagos pendientes o en revisión en este rango.</p>
               </div>
             ) : (
@@ -317,7 +326,7 @@ export default function Pagos() {
               <SkeletonTabla filas={6} />
             ) : validados.length === 0 ? (
               <div className="estado-vacio-ilustrado">
-                <span className="icono-vacio">📋</span>
+                <span className="icono-vacio"><IconoLista width={32} height={32} /></span>
                 <p>No hay pagos validados en este rango.</p>
               </div>
             ) : (

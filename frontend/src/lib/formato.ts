@@ -50,6 +50,33 @@ export function nombreCompletoEmpleado(e: Pick<Empleado, "primer_nombre" | "segu
     .join(" ");
 }
 
+/** Nombre para vista pública / horarios: respeta preferencias (un nombre + un apellido por defecto). */
+export function nombrePublicoEmpleado(
+  e: Pick<
+    Empleado,
+    | "primer_nombre"
+    | "segundo_nombre"
+    | "primer_apellido"
+    | "segundo_apellido"
+    | "pref_nombre_publico"
+    | "pref_apellido_publico"
+  >,
+): string {
+  const nombre =
+    e.pref_nombre_publico === "segundo" && e.segundo_nombre
+      ? e.segundo_nombre
+      : e.pref_nombre_publico === "ambos"
+        ? [e.primer_nombre, e.segundo_nombre].filter(Boolean).join(" ")
+        : e.primer_nombre;
+  const apellido =
+    e.pref_apellido_publico === "segundo" && e.segundo_apellido
+      ? e.segundo_apellido
+      : e.pref_apellido_publico === "ambos"
+        ? [e.primer_apellido, e.segundo_apellido].filter(Boolean).join(" ")
+        : e.primer_apellido;
+  return [nombre, apellido].filter(Boolean).join(" ");
+}
+
 export const ETIQUETAS_ESTADO_PAGO: Record<EstadoPago, string> = {
   pendiente: "Pendiente",
   marcado_pendiente_validacion: "En revisión",

@@ -928,10 +928,16 @@ table.tabla-datos tbody tr:hover {
   position: fixed;
   bottom: 1.2rem;
   right: 1.2rem;
+  left: auto;
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
   z-index: 200;
+  pointer-events: none;
+}
+
+.contenedor-toasts .toast {
+  pointer-events: auto;
 }
 
 .toast {
@@ -1159,6 +1165,7 @@ table.tabla-datos tbody tr:hover {
   outline: 2px solid var(--color-primario);
   outline-offset: -2px;
   background: color-mix(in srgb, var(--color-primario) 8%, transparent);
+  transition: outline-color 0.4s ease, background-color 0.4s ease;
 }
 
 .fila-resaltada td {
@@ -1925,7 +1932,8 @@ table.tabla-datos tbody tr:hover {
   .contenedor-toasts {
     left: 0.75rem;
     right: 0.75rem;
-    bottom: 0.75rem;
+    bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+    align-items: stretch;
   }
 
   .toast {
