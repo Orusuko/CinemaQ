@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
 import { useAuth } from "../../context/AuthContext";
 import { useArea } from "../../context/AreaContext";
@@ -21,11 +22,13 @@ export default function Solicitudes() {
   const { perfil } = useAuth();
   const { areas } = useArea();
   const { mostrarToast } = useToast();
+  const [searchParams] = useSearchParams();
   const [solicitudes, setSolicitudes] = useState<SolicitudCambioArea[]>([]);
   const [cargando, setCargando] = useState(true);
   const [accion, setAccion] = useState<{ solicitud: SolicitudCambioArea; aprobar: boolean } | null>(null);
 
   const esAdminGeneral = perfil?.rol === "administrador_general";
+  const solicitudResaltada = searchParams.get("solicitud");
 
   async function cargar() {
     setCargando(true);
@@ -44,7 +47,14 @@ export default function Solicitudes() {
 
   useEffect(() => {
     cargar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!solicitudResaltada || cargando) return;
+    const fila = document.getElementById(`solicitud-${solicitudResaltada}`);
+    fila?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [solicitudResaltada, cargando, solicitudes]);
 
   function nombreArea(id: string) {
     return areas.find((a) => a.id === id)?.nombre ?? "—";
@@ -79,7 +89,11 @@ export default function Solicitudes() {
           </thead>
           <tbody>
             {solicitudes.map((s) => (
-              <tr key={s.id}>
+              <tr
+                key={s.id}
+                id={`solicitud-${s.id}`}
+                className={solicitudResaltada === s.id ? "fila-resaltada" : undefined}
+              >
                 <td>
                   {s.empleados ? `${s.empleados.numero_empleado} · ${s.empleados.primer_nombre} ${s.empleados.primer_apellido}` : "—"}
                 </td>

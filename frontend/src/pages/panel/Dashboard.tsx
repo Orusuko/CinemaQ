@@ -19,12 +19,26 @@ import {
   formatoRangoPeriodo,
   hoyCdmx,
 } from "../../lib/periodoAbierto";
+import {
+  calcularEvolucionDiaria,
+  calcularTotalesDia,
+  calcularTotalesPeriodo,
+  diaAnteriorIso,
+} from "../../lib/balanceAgregados";
+import {
+  claveCacheBalance,
+  guardarCacheBalance,
+  leerCacheBalance,
+} from "../../lib/balanceCache";
 import { descargarCsv, filaCsv, ENCABEZADOS_HISTORIAL, nombreArchivoCsv } from "../../lib/csv";
 import { mensajeErrorConsulta } from "../../lib/consulta";
 import EnvoltorioTabla from "../../components/EnvoltorioTabla";
 import Tabs from "../../components/Tabs";
 import ChipArea from "../../components/ChipArea";
 import Modal from "../../components/Modal";
+import GraficaEvolucionDiaria from "../../components/GraficaEvolucionDiaria";
+import IndicadorTendencia from "../../components/IndicadorTendencia";
+import { IconoMoneda, IconoBillete } from "../../components/Iconos";
 import { useToast } from "../../context/ToastContext";
 import type { PagoCuota } from "../../lib/tipos";
 
@@ -55,6 +69,97 @@ function SkeletonTabla({ filas = 4 }: { filas?: number }) {
   );
 }
 
+function SkeletonGrafica() {
+  return (
+    <div className="tarjeta grafica-evolucion" aria-hidden="true">
+      <div className="skeleton skeleton-texto" style={{ width: "40%", marginBottom: "1rem" }} />
+      <div className="skeleton" style={{ height: 220, borderRadius: "var(--radio-borde)" }} />
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Tabla resumen por estado y área                                      */
+/* ------------------------------------------------------------------ */
+const ESTADOS_RESUMEN = ["validado", "marcado_pendiente_validacion", "pendiente", "cancelado"] as const;
+const ETIQUETAS_ESTADO_RESUMEN: Record<string, string> = {
+  validado: "Validado",
+  marcado_pendiente_validacion: "En revisión",
+  pendiente: "Pendiente",
+  cancelado: "Cancelado",
+};
+const CLASE_INDICADOR_ESTADO: Record<string, string> = {
+  validado: "indicador-color--validado",
+  marcado_pendiente_validacion: "indicador-color--revision",
+  pendiente: "indicador-color--pendiente",
+  cancelado: "indicador-color--cancelado",
+};
+
+function TablaResumenEstado({
+  pagos,
+  nombreArea,
+  areas,
+}: {
+  pagos: PagoCuota[];
+  nombreArea: (id: string) => string;
+  areas: { id: string; nombre: string }[];
+}) {
+  /* Obtener áreas únicas presentes en los pagos */
+  const areasPresentes = useMemo(() => {
+    const ids = new Set(pagos.map((p) => p.area_id));
+    return areas.filter((a) => ids.has(a.id));
+  }, [pagos, areas]);
+
+  const datos = useMemo(() => {
+    return ESTADOS_RESUMEN.map((estado) => {
+      const pagosFiltrados = pagos.filter((p) => p.estado === estado);
+      const total = pagosFiltrados.reduce((s, p) => s + Number(p.monto_esperado), 0);
+      const porArea = areasPresentes.map((area) => {
+        const pArea = pagosFiltrados.filter((p) => p.area_id === area.id);
+        return pArea.reduce((s, p) => s + Number(p.monto_esperado), 0);
+      });
+      return { estado, etiqueta: ETIQUETAS_ESTADO_RESUMEN[estado], total, porArea, conteo: pagosFiltrados.length };
+    });
+  }, [pagos, areasPresentes]);
+
+  if (pagos.length === 0) return null;
+
+  return (
+    <div className="tarjeta tabla-resumen-balance">
+      <div className="tabla-resumen-balance__titulo">Resumen por estado</div>
+      <EnvoltorioTabla>
+        <table className="tabla-datos">
+          <thead>
+            <tr>
+              <th>Estado</th>
+              <th>Cuotas</th>
+              {areasPresentes.map((a) => (
+                <th key={a.id}>{nombreArea(a.id)}</th>
+              ))}
+              <th>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {datos.map((d) => (
+              <tr key={d.estado}>
+                <td>
+                  <span className={`indicador-color ${CLASE_INDICADOR_ESTADO[d.estado]}`} />
+                  {d.etiqueta}
+                </td>
+                <td>{d.conteo}</td>
+                {d.porArea.map((m, i) => (
+                  <td key={areasPresentes[i].id}>{formatoMoneda(m)}</td>
+                ))}
+                <td><strong>{formatoMoneda(d.total)}</strong></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </EnvoltorioTabla>
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /* Componente principal                                                */
 /* ------------------------------------------------------------------ */
@@ -64,10 +169,12 @@ export default function Dashboard() {
   const { areas, areaIdsFiltro, cargando: cargandoAreas } = useArea();
   const { mostrarToast } = useToast();
 
-  /* --- Estado periodo abierto --- */
-  const [pagosPeriodo, setPagosPeriodo] = useState<PagoCuota[]>([]);
-  const [cargandoPeriodo, setCargandoPeriodo] = useState(true);
-  const [rangoPeriodo, setRangoPeriodo] = useState({ desde: "", hasta: "" });
+  /* --- Estado periodo abierto (hidrata desde caché si se vuelve a la ruta) --- */
+  const claveBalance = claveCacheBalance(areaIdsFiltro);
+  const cacheInicial = leerCacheBalance(claveBalance);
+  const [pagosPeriodo, setPagosPeriodo] = useState<PagoCuota[]>(() => cacheInicial?.pagos ?? []);
+  const [cargandoPeriodo, setCargandoPeriodo] = useState(() => !cacheInicial);
+  const [rangoPeriodo, setRangoPeriodo] = useState(() => cacheInicial?.rango ?? { desde: "", hasta: "" });
 
   /* --- Estado vista histórica --- */
   const [periodo, setPeriodo] = useState<PeriodoBalance>("dia");
@@ -83,15 +190,29 @@ export default function Dashboard() {
 
   const rangoHistorico = useMemo(() => calcularRango(periodo, rangoManual), [periodo, rangoManual]);
 
+  function abrirDrillDown(filtro: FiltroDrillDown) {
+    setFiltroModal(filtro);
+    setModalAbierto(true);
+  }
+
   /* ---------------------------------------------------------------- */
   /* Cargar periodo contable abierto                                    */
   /* ---------------------------------------------------------------- */
   useEffect(() => {
     if (cargandoAreas) return;
     let cancelado = false;
+    const clave = claveCacheBalance(areaIdsFiltro);
+    const cache = leerCacheBalance(clave);
+    /* Si hay caché, mostrar datos al instante y refrescar en silencio (sin skeleton). */
+    const silencioso = Boolean(cache);
+    if (cache) {
+      setPagosPeriodo(cache.pagos);
+      setRangoPeriodo(cache.rango);
+      setCargandoPeriodo(false);
+    }
 
     async function cargar() {
-      setCargandoPeriodo(true);
+      if (!silencioso) setCargandoPeriodo(true);
       const hoy = hoyCdmx();
 
       /* 1. Obtener último cierre por área */
@@ -107,18 +228,11 @@ export default function Dashboard() {
       const { data: cierresData } = await consultaCierres;
       if (cancelado) return;
 
-      /* Agrupar por área para obtener el más reciente de cada una,
-         luego tomar el más antiguo entre ellos (para cubrir ambas áreas). */
       let ultimoCierre: { hasta: string } | null = null;
       if (cierresData && cierresData.length > 0) {
-        /* cierresData ya viene ordenado desc por cerrado_en;
-           el primer registro es el cierre más reciente global.
-           Si filtramos ambas áreas, usamos el más antiguo entre
-           los más recientes de cada área para no dejar deuda fuera. */
         if (!areaIdsFiltro || areaIdsFiltro.length <= 1) {
           ultimoCierre = { hasta: (cierresData[0] as { hasta: string }).hasta };
         } else {
-          /* Cuando hay varias áreas, tomar el hasta más antiguo */
           const cierresUnicos = cierresData.map((c) => ({ hasta: (c as { hasta: string }).hasta }));
           ultimoCierre = cierreMasAntiguoEntre(cierresUnicos);
         }
@@ -142,9 +256,11 @@ export default function Dashboard() {
 
       if (error) {
         mostrarToast(mensajeErrorConsulta(error, "No se pudo cargar el balance del periodo."), "error");
-        setPagosPeriodo([]);
+        if (!silencioso) setPagosPeriodo([]);
       } else {
-        setPagosPeriodo((pagosData as PagoCuota[]) ?? []);
+        const pagos = (pagosData as PagoCuota[]) ?? [];
+        setPagosPeriodo(pagos);
+        guardarCacheBalance(clave, pagos, rango);
       }
       setCargandoPeriodo(false);
     }
@@ -189,55 +305,31 @@ export default function Dashboard() {
   /* ---------------------------------------------------------------- */
   /* Cálculos derivados — Periodo abierto                               */
   /* ---------------------------------------------------------------- */
-  const totalesPeriodo = useMemo(() => {
-    let esperado = 0;
-    let recaudado = 0;
-    let enRevision = 0;
-    let faltaPorCobrar = 0;
-    let pendientes = 0;
-    for (const p of pagosPeriodo) {
-      if (p.estado !== "cancelado") esperado += Number(p.monto_esperado);
-      if (p.estado === "validado") recaudado += Number(p.monto_esperado);
-      if (p.estado === "marcado_pendiente_validacion") enRevision += Number(p.monto_esperado);
-      if (p.estado === "pendiente") {
-        faltaPorCobrar += Number(p.monto_esperado);
-        pendientes++;
-      }
-    }
-    return {
-      esperado,
-      recaudado,
-      enRevision,
-      faltaPorCobrar,
-      pendientes,
-    };
-  }, [pagosPeriodo]);
+  const totalesPeriodo = useMemo(() => calcularTotalesPeriodo(pagosPeriodo), [pagosPeriodo]);
 
   const pctRecaudado = totalesPeriodo.esperado > 0
     ? Math.min(100, Math.round((totalesPeriodo.recaudado / totalesPeriodo.esperado) * 100))
     : 0;
 
-  /* Pagos de hoy (subconjunto del periodo, filtrado en cliente) */
   const hoy = hoyCdmx();
+  const ayer = useMemo(() => diaAnteriorIso(hoy), [hoy]);
+
   const pagosHoy = useMemo(() => pagosPeriodo.filter((p) => p.fecha === hoy), [pagosPeriodo, hoy]);
-  const totalesHoy = useMemo(() => {
-    let pendientes = 0;
-    let enRevision = 0;
-    let validados = 0;
-    for (const p of pagosHoy) {
-      if (p.estado === "pendiente") pendientes++;
-      if (p.estado === "marcado_pendiente_validacion") enRevision++;
-      if (p.estado === "validado") validados++;
-    }
-    return { pendientes, enRevision, validados };
-  }, [pagosHoy]);
+  const pagosAyer = useMemo(() => pagosPeriodo.filter((p) => p.fecha === ayer), [pagosPeriodo, ayer]);
+
+  const totalesHoy = useMemo(() => calcularTotalesDia(pagosHoy), [pagosHoy]);
+  const totalesAyer = useMemo(() => calcularTotalesDia(pagosAyer), [pagosAyer]);
+
+  const evolucionDiaria = useMemo(
+    () => calcularEvolucionDiaria(pagosPeriodo, rangoPeriodo),
+    [pagosPeriodo, rangoPeriodo],
+  );
 
   /* Pagos para el modal drill-down (pendientes + en revisión del periodo) */
   const pagosDrillDown = useMemo(() => {
     const noResueltos = pagosPeriodo.filter(
       (p) => p.estado === "pendiente" || p.estado === "marcado_pendiente_validacion",
     );
-    /* Orden: deuda más antigua primero */
     noResueltos.sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : 0));
     return noResueltos;
   }, [pagosPeriodo]);
@@ -331,14 +423,10 @@ export default function Dashboard() {
 
   const subtituloHistorico = `${ETIQUETAS_PERIODO[periodo]} · ${etiquetaArea}`;
 
-  /* deep-link para cada fila del drill-down */
   function enlacePagosFila(fecha: string) {
     return `/panel/pagos?pestana=revision&desde=${encodeURIComponent(fecha)}&hasta=${encodeURIComponent(fecha)}`;
   }
 
-  /* ---------------------------------------------------------------- */
-  /* Filtros del modal                                                  */
-  /* ---------------------------------------------------------------- */
   const FILTROS_MODAL: { id: FiltroDrillDown; etiqueta: string }[] = [
     { id: "todos", etiqueta: "Todos" },
     { id: "pendiente", etiqueta: "Solo pendiente" },
@@ -373,38 +461,68 @@ export default function Dashboard() {
         </button>
       </div>
 
-      {/* KPIs del periodo */}
+      {/* KPIs hero (2 principales) */}
       {cargandoPeriodo ? (
-        <div className="rejilla-kpi">
-          <SkeletonKpi />
-          <SkeletonKpi />
-          <SkeletonKpi />
+        <div className="rejilla-kpi--hero-dos">
           <SkeletonKpi />
           <SkeletonKpi />
         </div>
       ) : (
-        <div className="rejilla-kpi">
-          <div className="tarjeta tarjeta-kpi">
-            <div className="etiqueta-kpi">Total a recaudar</div>
-            <div className="valor-kpi">{formatoMoneda(totalesPeriodo.esperado)}</div>
+        <div className="rejilla-kpi--hero-dos">
+          <div className="tarjeta tarjeta-kpi tarjeta-kpi--hero">
+            <div className="tarjeta-kpi__icono tarjeta-kpi__icono--primario">
+              <IconoMoneda width={24} height={24} />
+            </div>
+            <div className="tarjeta-kpi__cuerpo">
+              <div className="etiqueta-kpi">Total a recaudar</div>
+              <div className="valor-kpi">{formatoMoneda(totalesPeriodo.esperado)}</div>
+              <IndicadorTendencia
+                actual={totalesHoy.esperado}
+                anterior={totalesAyer.esperado}
+                etiqueta="vs. ayer"
+              />
+            </div>
           </div>
-          <div className="tarjeta tarjeta-kpi">
-            <div className="etiqueta-kpi">Validado en caja</div>
-            <div className="valor-kpi">{formatoMoneda(totalesPeriodo.recaudado)}</div>
+
+          <div className="tarjeta tarjeta-kpi tarjeta-kpi--hero">
+            <div className="tarjeta-kpi__icono tarjeta-kpi__icono--exito">
+              <IconoBillete width={24} height={24} />
+            </div>
+            <div className="tarjeta-kpi__cuerpo">
+              <div className="etiqueta-kpi">Validado en caja</div>
+              <div className="valor-kpi">{formatoMoneda(totalesPeriodo.recaudado)}</div>
+              <IndicadorTendencia
+                actual={totalesHoy.recaudado}
+                anterior={totalesAyer.recaudado}
+                etiqueta="vs. ayer"
+              />
+            </div>
           </div>
+        </div>
+      )}
+
+      {/* KPIs secundarios del periodo */}
+      {!cargandoPeriodo && (
+        <div className="rejilla-kpi" style={{ marginBottom: "1rem" }}>
           <div
             className="tarjeta tarjeta-kpi tarjeta-kpi--clicable"
-            onClick={() => { setFiltroModal("pendiente"); setModalAbierto(true); }}
+            onClick={() => abrirDrillDown("pendiente")}
             role="button"
             tabIndex={0}
-            onKeyDown={(e) => { if (e.key === "Enter") { setFiltroModal("pendiente"); setModalAbierto(true); } }}
+            onKeyDown={(e) => { if (e.key === "Enter") abrirDrillDown("pendiente"); }}
           >
             <div className="etiqueta-kpi">Falta por cobrar</div>
             <div className={`valor-kpi ${totalesPeriodo.faltaPorCobrar === 0 ? "diferencia-cero" : "diferencia"}`}>
               {formatoMoneda(totalesPeriodo.faltaPorCobrar)}
             </div>
           </div>
-          <div className="tarjeta tarjeta-kpi tarjeta-kpi--en-revision">
+          <div
+            className="tarjeta tarjeta-kpi tarjeta-kpi--en-revision tarjeta-kpi--clicable"
+            onClick={() => abrirDrillDown("en_revision")}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === "Enter") abrirDrillDown("en_revision"); }}
+          >
             <div className="etiqueta-kpi">En revisión</div>
             <div className="valor-kpi" style={{ color: "var(--color-advertencia)" }}>
               {formatoMoneda(totalesPeriodo.enRevision)}
@@ -412,13 +530,17 @@ export default function Dashboard() {
           </div>
           <div
             className="tarjeta tarjeta-kpi tarjeta-kpi--clicable"
-            onClick={() => { setFiltroModal("pendiente"); setModalAbierto(true); }}
+            onClick={() => abrirDrillDown("pendiente")}
             role="button"
             tabIndex={0}
-            onKeyDown={(e) => { if (e.key === "Enter") { setFiltroModal("pendiente"); setModalAbierto(true); } }}
+            onKeyDown={(e) => { if (e.key === "Enter") abrirDrillDown("pendiente"); }}
           >
             <div className="etiqueta-kpi">Pendientes</div>
             <div className="valor-kpi">{totalesPeriodo.pendientes}</div>
+          </div>
+          <div className="tarjeta tarjeta-kpi">
+            <div className="etiqueta-kpi">Avance del periodo</div>
+            <div className="valor-kpi">{pctRecaudado}%</div>
           </div>
         </div>
       )}
@@ -434,6 +556,22 @@ export default function Dashboard() {
             <div className="barra-progreso-recaudo__relleno" style={{ width: `${pctRecaudado}%` }} />
           </div>
         </div>
+      )}
+
+      {/* =========================================================== */}
+      {/* GRÁFICA — Evolución diaria                                    */}
+      {/* =========================================================== */}
+      {cargandoPeriodo ? (
+        <SkeletonGrafica />
+      ) : (
+        <GraficaEvolucionDiaria datos={evolucionDiaria} />
+      )}
+
+      {/* =========================================================== */}
+      {/* TABLA RESUMEN — Por estado y área                             */}
+      {/* =========================================================== */}
+      {!cargandoPeriodo && pagosPeriodo.length > 0 && (
+        <TablaResumenEstado pagos={pagosPeriodo} nombreArea={nombreArea} areas={areas} />
       )}
 
       {/* =========================================================== */}
@@ -572,7 +710,7 @@ export default function Dashboard() {
                     <p>No hay pagos pendientes en este periodo.</p>
                   </div>
                 ) : (
-                  <TablaResumen pagos={pendientesHistorico} nombreArea={nombreArea} esSupervision={esSupervision} rango={rangoHistorico} />
+                  <TablaResumenHistorico pagos={pendientesHistorico} nombreArea={nombreArea} esSupervision={esSupervision} rango={rangoHistorico} />
                 )}
               </>
             )}
@@ -586,7 +724,7 @@ export default function Dashboard() {
                     <p>No hay pagos registrados en este periodo.</p>
                   </div>
                 ) : (
-                  <TablaResumen pagos={pagosHistorico} nombreArea={nombreArea} esSupervision={esSupervision} rango={rangoHistorico} soloLectura />
+                  <TablaResumenHistorico pagos={pagosHistorico} nombreArea={nombreArea} esSupervision={esSupervision} rango={rangoHistorico} soloLectura />
                 )}
               </>
             )}
@@ -607,7 +745,6 @@ export default function Dashboard() {
             {subtituloPeriodo} · {pagosDrillDownFiltrados.length} registros
           </p>
 
-          {/* Filtros rápidos */}
           <div className="filtros-rapidos">
             {FILTROS_MODAL.map((f) => (
               <button
@@ -702,7 +839,7 @@ export default function Dashboard() {
 /* ------------------------------------------------------------------ */
 /* Tabla resumen reutilizable para vista histórica                      */
 /* ------------------------------------------------------------------ */
-function TablaResumen({
+function TablaResumenHistorico({
   pagos,
   nombreArea,
   esSupervision,

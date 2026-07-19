@@ -95,9 +95,14 @@ function ContenidoPanel() {
     }
     cargarConteo();
     const intervalo = setInterval(cargarConteo, 60000);
+    const alActualizar = () => {
+      void cargarConteo();
+    };
+    window.addEventListener("notificaciones-actualizadas", alActualizar);
     return () => {
       activo = false;
       clearInterval(intervalo);
+      window.removeEventListener("notificaciones-actualizadas", alActualizar);
     };
   }, [perfil]);
 

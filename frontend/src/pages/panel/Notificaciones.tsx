@@ -1,18 +1,28 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 import { llamarRpc } from "../../lib/rpc";
 import { formatoFechaHora } from "../../lib/formato";
 import { mensajeErrorConsulta } from "../../lib/consulta";
+import {
+  avisarNotificacionesActualizadas,
+  resolverEnlaceNotificacion,
+} from "../../lib/enlaceNotificacion";
 import EnvoltorioTabla from "../../components/EnvoltorioTabla";
 import type { Notificacion } from "../../lib/tipos";
 
 export default function Notificaciones() {
   const { perfil } = useAuth();
   const { mostrarToast } = useToast();
+  const navegar = useNavigate();
   const [notificaciones, setNotificaciones] = useState<Notificacion[]>([]);
   const [cargando, setCargando] = useState(true);
+  const [procesando, setProcesando] = useState(false);
+  const [abriendoId, setAbriendoId] = useState<string | null>(null);
+
+  const noLeidas = useMemo(() => notificaciones.filter((n) => !n.leida), [notificaciones]);
 
   async function cargar() {
     if (!perfil) return;
@@ -40,11 +50,61 @@ export default function Notificaciones() {
   async function marcarLeida(id: string) {
     await llamarRpc("marcar_notificacion_leida", { p_notificacion_id: id });
     setNotificaciones((prev) => prev.map((n) => (n.id === id ? { ...n, leida: true } : n)));
+    avisarNotificacionesActualizadas();
+  }
+
+  async function marcarTodasLeidas() {
+    if (noLeidas.length === 0) return;
+    setProcesando(true);
+    try {
+      await Promise.all(
+        noLeidas.map((n) => llamarRpc("marcar_notificacion_leida", { p_notificacion_id: n.id })),
+      );
+      setNotificaciones((prev) => prev.map((n) => ({ ...n, leida: true })));
+      avisarNotificacionesActualizadas();
+      mostrarToast("Todas las notificaciones se marcaron como leídas.", "exito");
+    } catch (e) {
+      mostrarToast(e instanceof Error ? e.message : "No se pudieron marcar como leídas.", "error");
+      await cargar();
+    } finally {
+      setProcesando(false);
+    }
+  }
+
+  async function abrirMovimiento(n: Notificacion) {
+    setAbriendoId(n.id);
+    try {
+      if (!n.leida) {
+        await marcarLeida(n.id);
+      }
+      const enlace = await resolverEnlaceNotificacion(n);
+      if (!enlace) {
+        mostrarToast("Esta notificación no tiene un movimiento asociado.", "info");
+        return;
+      }
+      navegar(enlace);
+    } catch (e) {
+      mostrarToast(e instanceof Error ? e.message : "No se pudo abrir el movimiento.", "error");
+    } finally {
+      setAbriendoId(null);
+    }
   }
 
   return (
     <div>
-      <h2>Notificaciones</h2>
+      <div className="barra-herramientas">
+        <h2>Notificaciones</h2>
+        {noLeidas.length > 0 && (
+          <button
+            className="boton boton-secundario"
+            disabled={procesando}
+            onClick={marcarTodasLeidas}
+          >
+            {procesando ? "Marcando…" : `Marcar todas como leídas (${noLeidas.length})`}
+          </button>
+        )}
+      </div>
+
       <EnvoltorioTabla>
         <table className="tabla-datos">
           <thead>
@@ -60,15 +120,37 @@ export default function Notificaciones() {
             {notificaciones.map((n) => (
               <tr key={n.id} style={{ fontWeight: n.leida ? 400 : 700 }}>
                 <td>{!n.leida && <span className="etiqueta etiqueta-advertencia">Nueva</span>}</td>
-                <td>{n.titulo}</td>
+                <td>
+                  <button
+                    type="button"
+                    className="enlace-notificacion"
+                    onClick={() => abrirMovimiento(n)}
+                    disabled={abriendoId === n.id}
+                  >
+                    {n.titulo}
+                  </button>
+                </td>
                 <td>{n.mensaje}</td>
                 <td>{formatoFechaHora(n.creado_en)}</td>
                 <td className="fila-acciones">
-                  {!n.leida && (
-                    <button className="boton boton-chico boton-secundario" onClick={() => marcarLeida(n.id)}>
-                      Marcar leída
+                  <div className="acciones-inline">
+                    <button
+                      className="boton boton-chico boton-primario"
+                      disabled={abriendoId === n.id}
+                      onClick={() => abrirMovimiento(n)}
+                    >
+                      {abriendoId === n.id ? "…" : "Ver movimiento"}
                     </button>
-                  )}
+                    {!n.leida && (
+                      <button
+                        className="boton boton-chico boton-secundario"
+                        disabled={procesando || abriendoId === n.id}
+                        onClick={() => marcarLeida(n.id)}
+                      >
+                        Marcar leída
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

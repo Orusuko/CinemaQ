@@ -652,6 +652,248 @@ table.tabla-datos tbody tr:hover {
   padding-top: 0.75rem;
 }
 
+/* ---------------------------------------------------------------------- */
+/* KPI hero con icono y tendencia (Balance analítico)                      */
+/* ---------------------------------------------------------------------- */
+.tarjeta-kpi--hero {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1.2rem 1.4rem;
+}
+
+.tarjeta-kpi__icono {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  flex-shrink: 0;
+}
+
+.tarjeta-kpi__icono--primario {
+  background: rgba(37, 99, 235, 0.1);
+  color: var(--color-primario);
+}
+
+.tarjeta-kpi__icono--exito {
+  background: var(--color-exito-fondo);
+  color: var(--color-exito);
+}
+
+.tarjeta-kpi__icono--peligro {
+  background: var(--color-peligro-fondo);
+  color: var(--color-peligro);
+}
+
+.tarjeta-kpi__icono--advertencia {
+  background: var(--color-advertencia-fondo);
+  color: var(--color-advertencia);
+}
+
+.tarjeta-kpi__icono--neutral {
+  background: var(--color-neutral-fondo);
+  color: var(--color-neutral-texto);
+}
+
+.tarjeta-kpi__cuerpo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.tendencia {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  margin-top: 0.15rem;
+}
+
+.tendencia--positiva {
+  color: var(--color-exito);
+}
+
+.tendencia--negativa {
+  color: var(--color-peligro);
+}
+
+.tendencia--neutra {
+  color: var(--color-texto-suave);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Gráfica de evolución diaria (SVG)                                       */
+/* ---------------------------------------------------------------------- */
+.grafica-evolucion {
+  padding: 1.2rem 1.4rem;
+  margin-bottom: 1.2rem;
+}
+
+.grafica-evolucion--vacio {
+  min-height: 120px;
+}
+
+.grafica-evolucion__cabecera {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.grafica-evolucion__titulo {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-bottom: 0;
+}
+
+.grafica-evolucion__leyenda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  font-size: 0.78rem;
+  color: var(--color-texto-suave);
+}
+
+.grafica-evolucion__leyenda-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.grafica-evolucion__leyenda-linea {
+  display: inline-block;
+  width: 18px;
+  height: 3px;
+  border-radius: 2px;
+}
+
+.grafica-evolucion__leyenda-linea--primario {
+  background: var(--color-primario);
+}
+
+.grafica-evolucion__leyenda-linea--suave {
+  background: var(--color-texto-suave);
+  opacity: 0.55;
+}
+
+.grafica-evolucion__detalle-activo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  font-size: 0.82rem;
+  margin-bottom: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--color-fondo);
+  border-radius: 8px;
+}
+
+.grafica-evolucion__detalle-activo strong {
+  color: var(--color-primario-oscuro);
+}
+
+.grafica-evolucion__svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.grafica-evolucion__area {
+  fill: rgba(37, 99, 235, 0.08);
+}
+
+.grafica-evolucion__linea {
+  fill: none;
+  stroke: var(--color-primario);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.grafica-evolucion__linea--suave {
+  stroke: var(--color-texto-suave);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+  opacity: 0.65;
+}
+
+.grafica-evolucion__punto {
+  fill: var(--color-superficie);
+  stroke: var(--color-primario);
+  stroke-width: 2;
+  cursor: pointer;
+}
+
+.grafica-evolucion__punto--activo {
+  fill: var(--color-primario);
+  stroke: var(--color-primario-oscuro);
+  stroke-width: 2.5;
+}
+
+.rejilla-kpi--hero-dos {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+@media (max-width: 640px) {
+  .rejilla-kpi--hero-dos {
+    grid-template-columns: 1fr;
+  }
+}
+
+.grafica-evolucion__etiqueta-eje {
+  fill: var(--color-texto-suave);
+  font-size: 11px;
+  font-family: "Fira Sans", system-ui, sans-serif;
+}
+
+.grafica-evolucion__linea-guia {
+  stroke: var(--color-borde);
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+}
+
+.grafica-evolucion__tooltip {
+  fill: var(--color-primario);
+  font-size: 10px;
+  font-family: "Fira Code", monospace;
+  font-weight: 600;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Tabla resumen por estado/área (Balance)                                  */
+/* ---------------------------------------------------------------------- */
+.tabla-resumen-balance {
+  margin-bottom: 1.2rem;
+}
+
+.tabla-resumen-balance__titulo {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+
+.tabla-resumen-balance .indicador-color {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 0.5rem;
+  vertical-align: middle;
+}
+
+.indicador-color--validado { background: var(--color-exito); }
+.indicador-color--pendiente { background: var(--color-neutral-texto); }
+.indicador-color--revision { background: var(--color-advertencia); }
+.indicador-color--cancelado { background: var(--color-peligro); }
+
 .encabezado-modal {
   display: flex;
   justify-content: space-between;
@@ -815,6 +1057,83 @@ table.tabla-datos tbody tr:hover {
   flex-wrap: wrap;
   gap: 0.8rem;
   margin-bottom: 1.2rem;
+}
+
+.seccion-horario {
+  margin-bottom: 1.75rem;
+}
+
+.seccion-horario--confirmar {
+  padding-top: 0.25rem;
+  border-top: 1px solid var(--color-borde);
+}
+
+.seccion-horario__cabecera {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  margin-bottom: 0.85rem;
+}
+
+.seccion-horario__titulo {
+  margin: 0 0 0.2rem;
+  font-size: 1.05rem;
+  font-weight: 650;
+}
+
+.seccion-horario__ayuda {
+  margin: 0;
+  max-width: 40rem;
+}
+
+.asistencia-confirmada {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--color-exito-fondo);
+  color: var(--color-exito);
+}
+
+.fila-asistencia-confirmada td {
+  color: var(--color-texto-suave);
+}
+
+.enlace-notificacion {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  font-weight: inherit;
+  color: var(--color-primario);
+  text-align: left;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.enlace-notificacion:hover:not(:disabled) {
+  color: var(--color-primario-oscuro);
+}
+
+.enlace-notificacion:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.fila-resaltada {
+  outline: 2px solid var(--color-primario);
+  outline-offset: -2px;
+  background: color-mix(in srgb, var(--color-primario) 8%, transparent);
+}
+
+.fila-resaltada td {
+  background: transparent;
 }
 
 .grupo-filtros {

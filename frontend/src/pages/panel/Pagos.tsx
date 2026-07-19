@@ -46,6 +46,7 @@ export default function Pagos() {
   const [aEliminar, setAEliminar] = useState<PagoCuota | null>(null);
   const [mostrarManual, setMostrarManual] = useState(false);
   const [pestana, setPestana] = useState<"revision" | "validados">("revision");
+  const pagoResaltado = searchParams.get("pago");
 
   async function cargar() {
     setCargando(true);
@@ -85,6 +86,39 @@ export default function Pagos() {
       setHasta(rango.hasta);
     }
   }, [searchParams]);
+
+  /* Deep-link desde notificaciones: ?pago=uuid (completa fecha/pestaña si faltan) */
+  useEffect(() => {
+    if (!pagoResaltado) return;
+    let cancelado = false;
+    async function resolverPago() {
+      const { data } = await supabase
+        .from("pagos_cuota")
+        .select("fecha, estado")
+        .eq("id", pagoResaltado)
+        .maybeSingle();
+      if (cancelado || !data) return;
+      if (!esFechaIsoValida(searchParams.get("desde")) || !esFechaIsoValida(searchParams.get("hasta"))) {
+        setDesde(data.fecha);
+        setHasta(data.fecha);
+      }
+      if (searchParams.get("pestana") !== "revision" && searchParams.get("pestana") !== "validados") {
+        setPestana(data.estado === "validado" ? "validados" : "revision");
+      }
+    }
+    resolverPago();
+    return () => {
+      cancelado = true;
+    };
+  }, [pagoResaltado, searchParams]);
+
+  useEffect(() => {
+    if (!pagoResaltado || cargando) return;
+    const fila = document.getElementById(`pago-${pagoResaltado}`);
+    if (fila) {
+      fila.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [pagoResaltado, cargando, pagos, pestana]);
 
   const enRevisionYPendientes = useMemo(
     () => pagos.filter((p) => p.estado === "pendiente" || p.estado === "marcado_pendiente_validacion"),
@@ -203,7 +237,11 @@ export default function Pagos() {
                   </thead>
                   <tbody>
                     {enRevisionYPendientes.map((p) => (
-                      <tr key={p.id}>
+                      <tr
+                        key={p.id}
+                        id={`pago-${p.id}`}
+                        className={pagoResaltado === p.id ? "fila-resaltada" : undefined}
+                      >
                         <td>{p.empleados ? nombreCompletoEmpleado(p.empleados) : "—"}</td>
                         <td><ChipArea nombre={nombreArea(p.area_id)} /></td>
                         <td>{formatoFecha(p.fecha)}</td>
@@ -275,7 +313,11 @@ export default function Pagos() {
                   </thead>
                   <tbody>
                     {validados.map((p) => (
-                      <tr key={p.id}>
+                      <tr
+                        key={p.id}
+                        id={`pago-${p.id}`}
+                        className={pagoResaltado === p.id ? "fila-resaltada" : undefined}
+                      >
                         <td>{p.empleados ? nombreCompletoEmpleado(p.empleados) : "—"}</td>
                         <td><ChipArea nombre={nombreArea(p.area_id)} /></td>
                         <td>{formatoFecha(p.fecha)}</td>

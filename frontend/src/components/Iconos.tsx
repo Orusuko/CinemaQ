@@ -127,3 +127,9 @@ export const IconoCerrar = (p: SVGProps<SVGSVGElement>) => (
     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
   </Base>
 );
+
+export const IconoCheck = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+  </Base>
+);
