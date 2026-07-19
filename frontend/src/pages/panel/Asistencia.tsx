@@ -4,7 +4,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useArea } from "../../context/AreaContext";
 import { useToast } from "../../context/ToastContext";
 import { llamarRpc } from "../../lib/rpc";
-import { fechaHoyInputCdmx, nombreCompletoEmpleado } from "../../lib/formato";
+import { fechaHoyInputCdmx, nombreCompletoEmpleado, ETIQUETAS_ESTADO_PAGO, claseEstadoPago } from "../../lib/formato";
 import { mensajeErrorConsulta } from "../../lib/consulta";
 import ModalConfirmacion from "../../components/ModalConfirmacion";
 import EnvoltorioTabla from "../../components/EnvoltorioTabla";
@@ -114,7 +114,12 @@ export default function Asistencia() {
   return (
     <div>
       <div className="barra-herramientas">
-        <h2>Asistencia</h2>
+        <div>
+          <h2 style={{ marginBottom: "0.15rem" }}>Asistencia</h2>
+          <p className="texto-suave" style={{ margin: 0 }}>
+            Altas tardías (hasta 7 días) y bajas. El enrolamiento del día se hace en Horario.
+          </p>
+        </div>
         <div className="grupo-filtros">
           <div className="campo" style={{ marginBottom: 0 }}>
             <label>Fecha</label>
@@ -150,6 +155,13 @@ export default function Asistencia() {
         </div>
       )}
 
+      {cargando ? (
+        <div className="tarjeta" style={{ padding: "1rem" }} aria-hidden="true">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="skeleton skeleton-fila" />
+          ))}
+        </div>
+      ) : (
       <EnvoltorioTabla>
         <table className="tabla-datos">
           <thead>
@@ -167,7 +179,11 @@ export default function Asistencia() {
                 <td>{a.empleados?.numero_empleado}</td>
                 <td>{a.empleados ? nombreCompletoEmpleado(a.empleados) : "—"}</td>
                 <td><ChipArea nombre={areas.find((ar) => ar.id === a.area_id)?.nombre ?? "—"} /></td>
-                <td>{estadosPago[a.empleado_id] ?? "—"}</td>
+                <td>
+                  {estadosPago[a.empleado_id]
+                    ? <span className={claseEstadoPago(estadosPago[a.empleado_id])}>{ETIQUETAS_ESTADO_PAGO[estadosPago[a.empleado_id]]}</span>
+                    : "—"}
+                </td>
                 {!esSupervision && (
                   <td>
                     <button className="boton boton-chico boton-peligro" onClick={() => setAEliminar(a)}>
@@ -177,7 +193,7 @@ export default function Asistencia() {
                 )}
               </tr>
             ))}
-            {!cargando && asistencias.length === 0 && (
+            {asistencias.length === 0 && (
               <tr>
                 <td colSpan={esSupervision ? 4 : 5} className="estado-vacio">
                   No hay asistencia registrada para esta fecha.
@@ -187,6 +203,7 @@ export default function Asistencia() {
           </tbody>
         </table>
       </EnvoltorioTabla>
+      )}
 
       {aEliminar && (
         <ModalConfirmacion

@@ -51,6 +51,43 @@ export default function PaginaPublica() {
       .slice(0, 20);
   }, [busqueda, empleados]);
 
+  const [indiceResaltado, setIndiceResaltado] = useState(-1);
+
+  // Resetear índice cuando cambia la búsqueda o los resultados
+  useEffect(() => {
+    setIndiceResaltado(-1);
+  }, [busqueda]);
+
+  function manejarTeclaAutocompletado(e: React.KeyboardEvent) {
+    if (resultados.length === 0) return;
+
+    switch (e.key) {
+      case "ArrowDown":
+        e.preventDefault();
+        setIndiceResaltado((prev) => (prev + 1) % resultados.length);
+        break;
+      case "ArrowUp":
+        e.preventDefault();
+        setIndiceResaltado((prev) => (prev - 1 + resultados.length) % resultados.length);
+        break;
+      case "Enter":
+        e.preventDefault();
+        {
+          const indice = indiceResaltado >= 0 ? indiceResaltado : 0;
+          if (indice < resultados.length) {
+            setSeleccionado(resultados[indice]);
+            setBusqueda("");
+            setIndiceResaltado(-1);
+          }
+        }
+        break;
+      case "Escape":
+        e.preventDefault();
+        setBusqueda("");
+        break;
+    }
+  }
+
   async function marcarPago() {
     if (!seleccionado) return;
     setEnviando(true);
@@ -100,14 +137,23 @@ export default function PaginaPublica() {
                 placeholder="Ej. 1234 o Juan Pérez"
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
+                onKeyDown={manejarTeclaAutocompletado}
                 autoComplete="off"
+                role="combobox"
+                aria-expanded={resultados.length > 0}
+                aria-controls="lista-autocompletado"
+                aria-activedescendant={indiceResaltado >= 0 ? `opcion-${indiceResaltado}` : undefined}
+                aria-autocomplete="list"
               />
               {resultados.length > 0 && (
-                <ul className="lista-resultados">
-                  {resultados.map((r) => (
+                <ul className="lista-resultados" role="listbox" id="lista-autocompletado">
+                  {resultados.map((r, i) => (
                     <li
                       key={r.id}
-                      className="opcion-resultado"
+                      id={`opcion-${i}`}
+                      role="option"
+                      aria-selected={i === indiceResaltado}
+                      className={`opcion-resultado${i === indiceResaltado ? " resaltado" : ""}`}
                       onClick={() => {
                         setSeleccionado(r);
                         setBusqueda("");
@@ -145,7 +191,12 @@ export default function PaginaPublica() {
           </button>
 
           {mensaje && (
-            <p className={mensaje.tipo === "error" ? "mensaje-error" : "texto-suave"} style={{ marginTop: "0.8rem" }}>
+            <p
+              className={mensaje.tipo === "error" ? "mensaje-error" : "mensaje-exito-publico"}
+              style={{ marginTop: "0.8rem" }}
+              role="status"
+              aria-live="polite"
+            >
               {mensaje.texto}
             </p>
           )}

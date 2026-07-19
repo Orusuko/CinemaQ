@@ -140,7 +140,11 @@ function ContenidoPanel() {
           {menuAbierto ? <IconoCerrar /> : <IconoMenu />}
         </button>
         <span className="cabecera-movil__marca">Cuotas Propinas</span>
-        <NavLink to="/panel/notificaciones" className="cabecera-movil__campana" aria-label="Notificaciones">
+        <NavLink
+          to="/panel/notificaciones"
+          className="cabecera-movil__campana"
+          aria-label={noLeidas > 0 ? `Notificaciones: ${noLeidas} no leída${noLeidas !== 1 ? "s" : ""}` : "Notificaciones"}
+        >
           <IconoCampana />
           {noLeidas > 0 && <span className="badge-contador badge-contador--movil">{noLeidas}</span>}
         </NavLink>
@@ -152,6 +156,9 @@ function ContenidoPanel() {
           <button type="button" className="boton-cerrar-menu" aria-label="Cerrar menú" onClick={cerrarMenu}>
             <IconoCerrar />
           </button>
+        </div>
+        <div className="barra-lateral__selector-area-movil">
+          <SelectorArea />
         </div>
         <div className="marca marca--escritorio">Cuotas Propinas</div>
         <nav aria-label="Menú principal">
@@ -209,7 +216,12 @@ function ContenidoPanel() {
           )}
 
           <GrupoNav titulo="Cuenta">
-            <NavLink to="/panel/notificaciones" className={claseNav} onClick={cerrarMenu}>
+            <NavLink
+              to="/panel/notificaciones"
+              className={claseNav}
+              onClick={cerrarMenu}
+              aria-label={noLeidas > 0 ? `Notificaciones: ${noLeidas} no leída${noLeidas !== 1 ? "s" : ""}` : "Notificaciones"}
+            >
               <IconoCampana /> Notificaciones
               {noLeidas > 0 && <span className="badge-contador">{noLeidas}</span>}
             </NavLink>

@@ -105,6 +105,13 @@ export default function Notificaciones() {
         )}
       </div>
 
+      {cargando ? (
+        <div className="tarjeta" style={{ padding: "1rem" }} aria-hidden="true">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="skeleton skeleton-fila" />
+          ))}
+        </div>
+      ) : (
       <EnvoltorioTabla>
         <table className="tabla-datos">
           <thead>
@@ -130,7 +137,9 @@ export default function Notificaciones() {
                     {n.titulo}
                   </button>
                 </td>
-                <td>{n.mensaje}</td>
+                <td>
+                  <span className="celda-mensaje-notif" title={n.mensaje}>{n.mensaje}</span>
+                </td>
                 <td>{formatoFechaHora(n.creado_en)}</td>
                 <td className="fila-acciones">
                   <div className="acciones-inline">
@@ -139,7 +148,7 @@ export default function Notificaciones() {
                       disabled={abriendoId === n.id}
                       onClick={() => abrirMovimiento(n)}
                     >
-                      {abriendoId === n.id ? "…" : "Ver movimiento"}
+                      {abriendoId === n.id ? "Abriendo…" : "Ver movimiento"}
                     </button>
                     {!n.leida && (
                       <button
@@ -154,7 +163,7 @@ export default function Notificaciones() {
                 </td>
               </tr>
             ))}
-            {!cargando && notificaciones.length === 0 && (
+            {notificaciones.length === 0 && (
               <tr>
                 <td colSpan={5} className="estado-vacio">
                   No tienes notificaciones.
@@ -164,6 +173,7 @@ export default function Notificaciones() {
           </tbody>
         </table>
       </EnvoltorioTabla>
+      )}
     </div>
   );
 }

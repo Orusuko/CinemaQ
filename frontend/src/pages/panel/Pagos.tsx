@@ -35,7 +35,7 @@ export default function Pagos() {
   const esSupervision = perfil?.rol === "supervision";
   const { areaIdsFiltro, areas } = useArea();
   const { mostrarToast } = useToast();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [desde, setDesde] = useState(fechaHoyInputCdmx());
   const [hasta, setHasta] = useState(fechaHoyInputCdmx());
@@ -43,6 +43,7 @@ export default function Pagos() {
   const [cargando, setCargando] = useState(true);
   const [procesandoId, setProcesandoId] = useState<string | null>(null);
   const [aRevertir, setARevertir] = useState<PagoCuota | null>(null);
+  const [aRechazar, setARechazar] = useState<PagoCuota | null>(null);
   const [aEliminar, setAEliminar] = useState<PagoCuota | null>(null);
   const [mostrarManual, setMostrarManual] = useState(false);
   const [pestana, setPestana] = useState<"revision" | "validados">("revision");
@@ -144,16 +145,15 @@ export default function Pagos() {
     }
   }
 
-  async function rechazarPago(pagoId: string) {
-    setProcesandoId(pagoId);
+  async function confirmarRechazar() {
+    if (!aRechazar) return;
     try {
-      await llamarRpc("rechazar_pago", { p_pago_id: pagoId });
+      await llamarRpc("rechazar_pago", { p_pago_id: aRechazar.id });
+      setARechazar(null);
       mostrarToast("Pago rechazado. El empleado puede volver a marcarlo.", "exito");
       await cargar();
-    } catch {
-      mostrarToast("Error al rechazar el pago.", "error");
-    } finally {
-      setProcesandoId(null);
+    } catch (e) {
+      throw e instanceof Error ? e : new Error("No se pudo rechazar el pago.");
     }
   }
 
@@ -197,11 +197,27 @@ export default function Pagos() {
         <div className="grupo-filtros">
           <div className="campo" style={{ marginBottom: 0 }}>
             <label>Desde</label>
-            <input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} />
+            <input type="date" value={desde} onChange={(e) => {
+              const valor = e.target.value;
+              setDesde(valor);
+              setSearchParams((prev) => {
+                const next = new URLSearchParams(prev);
+                next.set("desde", valor);
+                return next;
+              }, { replace: true });
+            }} />
           </div>
           <div className="campo" style={{ marginBottom: 0 }}>
             <label>Hasta</label>
-            <input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} />
+            <input type="date" value={hasta} onChange={(e) => {
+              const valor = e.target.value;
+              setHasta(valor);
+              setSearchParams((prev) => {
+                const next = new URLSearchParams(prev);
+                next.set("hasta", valor);
+                return next;
+              }, { replace: true });
+            }} />
           </div>
           {!esSupervision && (
             <button className="boton boton-acento" onClick={() => setMostrarManual(true)}>
@@ -211,7 +227,14 @@ export default function Pagos() {
         </div>
       </div>
 
-      <Tabs pestanas={pestanasConfig} activa={pestana} onChange={(id) => setPestana(id as "revision" | "validados")}>
+      <Tabs pestanas={pestanasConfig} activa={pestana} onChange={(id) => {
+        setPestana(id as "revision" | "validados");
+        setSearchParams((prev) => {
+          const next = new URLSearchParams(prev);
+          next.set("pestana", id);
+          return next;
+        }, { replace: true });
+      }}>
         {pestana === "revision" && (
           <>
             {cargando ? (
@@ -264,9 +287,9 @@ export default function Pagos() {
                                 <button
                                   className="boton boton-chico boton-rechazar"
                                   disabled={procesandoId === p.id}
-                                  onClick={() => rechazarPago(p.id)}
+                                  onClick={() => setARechazar(p)}
                                 >
-                                  {procesandoId === p.id ? "…" : "✗ Rechazar"}
+                                  ✗ Rechazar
                                 </button>
                               )}
                               <button
@@ -355,6 +378,17 @@ export default function Pagos() {
           peligro
           onCancelar={() => setARevertir(null)}
           onConfirmar={confirmarRevertir}
+        />
+      )}
+
+      {aRechazar && (
+        <ModalConfirmacion
+          titulo="Rechazar pago"
+          mensaje={`¿Confirmas rechazar el pago de ${nombreEmpleadoPago(aRechazar)} (${formatoFecha(aRechazar.fecha)})? El empleado podrá volver a marcarlo.`}
+          etiquetaBotonConfirmar="Rechazar"
+          peligro
+          onCancelar={() => setARechazar(null)}
+          onConfirmar={confirmarRechazar}
         />
       )}
 

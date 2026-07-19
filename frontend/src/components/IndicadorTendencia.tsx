@@ -1,4 +1,4 @@
-/** Badge de variación porcentual vs periodo anterior (ej. ayer). */
+/** Badge de variación porcentual hoy vs ayer. */
 export default function IndicadorTendencia({
   actual,
   anterior,
@@ -9,7 +9,11 @@ export default function IndicadorTendencia({
   etiqueta: string;
 }) {
   if (anterior === 0 && actual === 0) {
-    return <span className="tendencia tendencia--neutra">— {etiqueta}</span>;
+    return (
+      <span className="tendencia tendencia--neutra" title="Hoy y ayer en $0 — la variación compara solo esos dos días, no el total del periodo">
+        — {etiqueta}
+      </span>
+    );
   }
   if (anterior === 0) {
     return <span className="tendencia tendencia--positiva">↑ nuevo {etiqueta}</span>;
@@ -19,7 +23,7 @@ export default function IndicadorTendencia({
   const clase =
     pct > 0 ? "tendencia--positiva" : pct < 0 ? "tendencia--negativa" : "tendencia--neutra";
   return (
-    <span className={`tendencia ${clase}`}>
+    <span className={`tendencia ${clase}`} title={`Hoy: ${actual} · Ayer: ${anterior}`}>
       {signo} {Math.abs(pct).toFixed(1).replace(".", ",")}% {etiqueta}
     </span>
   );

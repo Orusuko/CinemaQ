@@ -192,7 +192,12 @@ export default function Horario() {
   return (
     <div>
       <div className="barra-herramientas">
-        <h2>Horario del día</h2>
+        <div>
+          <h2 style={{ marginBottom: "0.15rem" }}>Horario del día</h2>
+          <p className="texto-suave" style={{ margin: 0 }}>
+            Enrolar y confirmar asistencia del día. Para altas tardías o bajas usa Asistencia.
+          </p>
+        </div>
         <div className="grupo-filtros">
           <div className="campo" style={{ marginBottom: 0 }}>
             <label>Fecha</label>
@@ -202,8 +207,8 @@ export default function Horario() {
       </div>
 
       {!esSupervision && !areaUnica && (
-        <p className="texto-suave">
-          Selecciona un área específica arriba (no «Ambas áreas») para poder agregar o quitar empleados del horario.
+        <p className="texto-suave aviso-area-requerida" role="status">
+          Selecciona un área específica en el menú (no «Ambas áreas») para poder agregar o quitar empleados del horario.
         </p>
       )}
 
@@ -220,6 +225,13 @@ export default function Horario() {
           </div>
         </div>
 
+        {cargando ? (
+          <div className="tarjeta" style={{ padding: "1rem" }} aria-hidden="true">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="skeleton skeleton-fila" />
+            ))}
+          </div>
+        ) : (
         <EnvoltorioTabla>
           <table className="tabla-datos">
             <thead>
@@ -249,7 +261,7 @@ export default function Horario() {
                   )}
                 </tr>
               ))}
-              {!cargando && empleadosSinHorario.length === 0 && (
+              {empleadosSinHorario.length === 0 && (
                 <tr>
                   <td colSpan={esSupervision ? 3 : 4} className="estado-vacio">
                     {empleados.length === 0
@@ -261,6 +273,7 @@ export default function Horario() {
             </tbody>
           </table>
         </EnvoltorioTabla>
+        )}
       </section>
 
       {/* =========================================================== */}
@@ -275,7 +288,7 @@ export default function Horario() {
               Quienes ya tienen asistencia quedan confirmados y no se pueden volver a marcar.
             </p>
           </div>
-          {!esSupervision && empleadosEnHorario.length > 0 && (
+          {!esSupervision && !cargando && empleadosEnHorario.length > 0 && (
             <div className="grupo-filtros">
               <button
                 type="button"
@@ -296,6 +309,13 @@ export default function Horario() {
           )}
         </div>
 
+        {cargando ? (
+          <div className="tarjeta" style={{ padding: "1rem" }} aria-hidden="true">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="skeleton skeleton-fila" />
+            ))}
+          </div>
+        ) : (
         <EnvoltorioTabla>
           <table className="tabla-datos">
             <thead>
@@ -355,7 +375,7 @@ export default function Horario() {
                   </tr>
                 );
               })}
-              {!cargando && empleadosEnHorario.length === 0 && (
+              {empleadosEnHorario.length === 0 && (
                 <tr>
                   <td colSpan={esSupervision ? 4 : 5} className="estado-vacio">
                     Aún no hay nadie en el horario. Agrega empleados en el paso 1.
@@ -365,6 +385,7 @@ export default function Horario() {
             </tbody>
           </table>
         </EnvoltorioTabla>
+        )}
       </section>
     </div>
   );

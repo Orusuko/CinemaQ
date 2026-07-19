@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 
 export interface Pestana {
   id: string;
@@ -15,17 +15,41 @@ interface TabsProps {
 
 /**
  * Componente de pestañas reutilizable con accesibilidad ARIA completa.
- * Estilo underline (no botones sólidos) para consistencia con UX moderna.
+ * Navegación con flechas ←/→ (wrap circular). Estilo underline.
  */
 export default function Tabs({ pestanas, activa, onChange, children }: TabsProps) {
+  const refsBoton = useRef<(HTMLButtonElement | null)[]>([]);
+
+  function manejarTeclaPestana(e: React.KeyboardEvent) {
+    const indiceActual = pestanas.findIndex((p) => p.id === activa);
+    let nuevoIndice = -1;
+
+    if (e.key === "ArrowRight") {
+      nuevoIndice = (indiceActual + 1) % pestanas.length;
+    } else if (e.key === "ArrowLeft") {
+      nuevoIndice = (indiceActual - 1 + pestanas.length) % pestanas.length;
+    } else if (e.key === "Home") {
+      nuevoIndice = 0;
+    } else if (e.key === "End") {
+      nuevoIndice = pestanas.length - 1;
+    }
+
+    if (nuevoIndice >= 0) {
+      e.preventDefault();
+      onChange(pestanas[nuevoIndice].id);
+      refsBoton.current[nuevoIndice]?.focus();
+    }
+  }
+
   return (
     <div>
-      <div className="barra-pestanas" role="tablist" aria-label="Pestañas">
-        {pestanas.map((p) => {
+      <div className="barra-pestanas" role="tablist" aria-label="Pestañas" onKeyDown={manejarTeclaPestana}>
+        {pestanas.map((p, i) => {
           const seleccionada = p.id === activa;
           return (
             <button
               key={p.id}
+              ref={(el) => { refsBoton.current[i] = el; }}
               role="tab"
               id={`tab-${p.id}`}
               aria-selected={seleccionada}

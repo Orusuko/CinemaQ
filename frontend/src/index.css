@@ -176,6 +176,16 @@ button {
   border-color: var(--color-primario);
 }
 
+.mensaje-exito-publico {
+  margin-top: 0.8rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radio);
+  background: var(--color-exito-fondo);
+  color: var(--color-exito);
+  font-weight: 600;
+  line-height: 1.4;
+}
+
 .mensaje-error {
   color: var(--color-peligro);
   font-size: 0.85rem;
@@ -506,6 +516,8 @@ table.tabla-datos tbody tr:hover {
   padding: 1.5rem;
   max-height: 90vh;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  outline: none;
 }
 
 .caja-modal.ancho {
@@ -1088,6 +1100,15 @@ table.tabla-datos tbody tr:hover {
   max-width: 40rem;
 }
 
+.aviso-area-requerida {
+  margin: 0 0 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radio);
+  background: var(--color-advertencia-fondo);
+  color: var(--color-advertencia);
+  font-weight: 500;
+}
+
 .asistencia-confirmada {
   display: inline-flex;
   align-items: center;
@@ -1101,6 +1122,14 @@ table.tabla-datos tbody tr:hover {
 
 .fila-asistencia-confirmada td {
   color: var(--color-texto-suave);
+}
+
+.celda-mensaje-notif {
+  max-width: 28rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .enlace-notificacion {
@@ -1464,6 +1493,10 @@ table.tabla-datos tbody tr:hover {
   display: none;
 }
 
+.barra-lateral__selector-area-movil {
+  display: none;
+}
+
 .marca--escritorio {
   display: block;
 }
@@ -1585,6 +1618,29 @@ table.tabla-datos tbody tr:hover {
   .barra-lateral__encabezado-movil .marca {
     margin-bottom: 0;
     padding: 0;
+  }
+
+  .barra-lateral__selector-area-movil {
+    display: block;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .barra-lateral__selector-area-movil .selector-area {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.35rem;
+  }
+
+  .barra-lateral__selector-area-movil .selector-area__etiqueta {
+    color: #94a3b8;
+    text-align: left;
+  }
+
+  .barra-lateral__selector-area-movil .selector-area__control {
+    width: 100%;
+    min-width: 0;
   }
 
   .marca--escritorio {

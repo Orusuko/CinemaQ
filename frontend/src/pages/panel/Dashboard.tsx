@@ -38,7 +38,7 @@ import ChipArea from "../../components/ChipArea";
 import Modal from "../../components/Modal";
 import GraficaEvolucionDiaria from "../../components/GraficaEvolucionDiaria";
 import IndicadorTendencia from "../../components/IndicadorTendencia";
-import { IconoMoneda, IconoBillete } from "../../components/Iconos";
+import { IconoMoneda, IconoBillete, IconoCheck, IconoLista } from "../../components/Iconos";
 import { useToast } from "../../context/ToastContext";
 import type { PagoCuota } from "../../lib/tipos";
 
@@ -479,7 +479,7 @@ export default function Dashboard() {
               <IndicadorTendencia
                 actual={totalesHoy.esperado}
                 anterior={totalesAyer.esperado}
-                etiqueta="vs. ayer"
+                etiqueta="hoy vs ayer"
               />
             </div>
           </div>
@@ -494,7 +494,7 @@ export default function Dashboard() {
               <IndicadorTendencia
                 actual={totalesHoy.recaudado}
                 anterior={totalesAyer.recaudado}
-                etiqueta="vs. ayer"
+                etiqueta="hoy vs ayer"
               />
             </div>
           </div>
@@ -509,34 +509,25 @@ export default function Dashboard() {
             onClick={() => abrirDrillDown("pendiente")}
             role="button"
             tabIndex={0}
-            onKeyDown={(e) => { if (e.key === "Enter") abrirDrillDown("pendiente"); }}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); abrirDrillDown("pendiente"); } }}
           >
             <div className="etiqueta-kpi">Falta por cobrar</div>
             <div className={`valor-kpi ${totalesPeriodo.faltaPorCobrar === 0 ? "diferencia-cero" : "diferencia"}`}>
               {formatoMoneda(totalesPeriodo.faltaPorCobrar)}
             </div>
+            <div className="texto-suave" style={{ fontSize: "0.82rem" }}>{totalesPeriodo.pendientes} cuota{totalesPeriodo.pendientes !== 1 ? "s" : ""}</div>
           </div>
           <div
             className="tarjeta tarjeta-kpi tarjeta-kpi--en-revision tarjeta-kpi--clicable"
             onClick={() => abrirDrillDown("en_revision")}
             role="button"
             tabIndex={0}
-            onKeyDown={(e) => { if (e.key === "Enter") abrirDrillDown("en_revision"); }}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); abrirDrillDown("en_revision"); } }}
           >
             <div className="etiqueta-kpi">En revisión</div>
             <div className="valor-kpi" style={{ color: "var(--color-advertencia)" }}>
               {formatoMoneda(totalesPeriodo.enRevision)}
             </div>
-          </div>
-          <div
-            className="tarjeta tarjeta-kpi tarjeta-kpi--clicable"
-            onClick={() => abrirDrillDown("pendiente")}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => { if (e.key === "Enter") abrirDrillDown("pendiente"); }}
-          >
-            <div className="etiqueta-kpi">Pendientes</div>
-            <div className="valor-kpi">{totalesPeriodo.pendientes}</div>
           </div>
           <div className="tarjeta tarjeta-kpi">
             <div className="etiqueta-kpi">Avance del periodo</div>
@@ -706,7 +697,7 @@ export default function Dashboard() {
                   <SkeletonTabla />
                 ) : pendientesHistorico.length === 0 ? (
                   <div className="estado-vacio-ilustrado">
-                    <span className="icono-vacio">✅</span>
+                    <span className="icono-vacio"><IconoCheck width={32} height={32} /></span>
                     <p>No hay pagos pendientes en este periodo.</p>
                   </div>
                 ) : (
@@ -720,7 +711,7 @@ export default function Dashboard() {
                   <SkeletonTabla filas={6} />
                 ) : pagosHistorico.length === 0 ? (
                   <div className="estado-vacio-ilustrado">
-                    <span className="icono-vacio">📋</span>
+                    <span className="icono-vacio"><IconoLista width={32} height={32} /></span>
                     <p>No hay pagos registrados en este periodo.</p>
                   </div>
                 ) : (
