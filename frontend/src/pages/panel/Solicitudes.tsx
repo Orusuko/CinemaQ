@@ -10,6 +10,9 @@ import { mensajeErrorConsulta } from "../../lib/consulta";
 import ModalConfirmacion from "../../components/ModalConfirmacion";
 import EnvoltorioTabla from "../../components/EnvoltorioTabla";
 import ChipArea from "../../components/ChipArea";
+import EstadoVacio from "../../components/EstadoVacio";
+import SkeletonTabla from "../../components/SkeletonTabla";
+import { IconoIntercambio } from "../../components/Iconos";
 import type { SolicitudCambioArea } from "../../lib/tipos";
 
 const ETIQUETAS_ESTADO: Record<string, string> = {
@@ -83,6 +86,14 @@ export default function Solicitudes() {
   return (
     <div>
       <h2>Solicitudes de cambio de área</h2>
+      {cargando ? (
+        <SkeletonTabla filas={5} />
+      ) : solicitudes.length === 0 ? (
+        <EstadoVacio
+          icono={<IconoIntercambio width={32} height={32} />}
+          mensaje="No hay solicitudes."
+        />
+      ) : (
       <EnvoltorioTabla>
         <table className="tabla-datos">
           <thead>
@@ -107,7 +118,7 @@ export default function Solicitudes() {
                 </td>
                 <td><ChipArea nombre={nombreArea(s.area_actual_id)} /></td>
                 <td><ChipArea nombre={nombreArea(s.area_solicitada_id)} /></td>
-                <td>{formatoFechaHora(s.creado_en)}</td>
+                <td className="num-tabular">{formatoFechaHora(s.creado_en)}</td>
                 <td>
                   <span
                     className={
@@ -137,16 +148,10 @@ export default function Solicitudes() {
                 )}
               </tr>
             ))}
-            {!cargando && solicitudes.length === 0 && (
-              <tr>
-                <td colSpan={esAdminGeneral ? 6 : 5} className="estado-vacio">
-                  No hay solicitudes.
-                </td>
-              </tr>
-            )}
           </tbody>
         </table>
       </EnvoltorioTabla>
+      )}
 
       {accion && (
         <ModalConfirmacion

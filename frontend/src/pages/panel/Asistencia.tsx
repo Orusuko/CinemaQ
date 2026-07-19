@@ -9,6 +9,9 @@ import { mensajeErrorConsulta } from "../../lib/consulta";
 import ModalConfirmacion from "../../components/ModalConfirmacion";
 import EnvoltorioTabla from "../../components/EnvoltorioTabla";
 import ChipArea from "../../components/ChipArea";
+import EstadoVacio from "../../components/EstadoVacio";
+import SkeletonTabla from "../../components/SkeletonTabla";
+import { IconoLista } from "../../components/Iconos";
 import type { AsistenciaDiaria, Empleado, EstadoPago, RespuestaRpc } from "../../lib/tipos";
 
 export default function Asistencia() {
@@ -114,16 +117,17 @@ export default function Asistencia() {
   return (
     <div>
       <div className="barra-herramientas">
-        <div>
-          <h2 style={{ marginBottom: "0.15rem" }}>Asistencia</h2>
-          <p className="texto-suave" style={{ margin: 0 }}>
+        <div className="cabecera-pagina">
+          <h2>Asistencia</h2>
+          <p className="texto-suave cabecera-pagina__subtitulo">
             Altas tardías (hasta 7 días) y bajas. El enrolamiento del día se hace en Horario.
           </p>
         </div>
         <div className="grupo-filtros">
           <div className="campo" style={{ marginBottom: 0 }}>
-            <label>Fecha</label>
+            <label htmlFor="asistencia-filtro-fecha">Fecha</label>
             <input
+              id="asistencia-filtro-fecha"
               type="date"
               value={fecha}
               min={fechaMinima}
@@ -138,8 +142,12 @@ export default function Asistencia() {
         <div className="barra-herramientas">
           <div className="grupo-filtros">
             <div className="campo" style={{ marginBottom: 0, minWidth: 260 }}>
-              <label>Agregar asistencia (hasta 7 días atrás)</label>
-              <select value={empleadoNuevo} onChange={(e) => setEmpleadoNuevo(e.target.value)}>
+              <label htmlFor="asistencia-empleado-nuevo">Agregar asistencia (hasta 7 días atrás)</label>
+              <select
+                id="asistencia-empleado-nuevo"
+                value={empleadoNuevo}
+                onChange={(e) => setEmpleadoNuevo(e.target.value)}
+              >
                 <option value="">Selecciona un empleado…</option>
                 {disponiblesParaAgregar.map((e) => (
                   <option key={e.id} value={e.id}>
@@ -156,11 +164,12 @@ export default function Asistencia() {
       )}
 
       {cargando ? (
-        <div className="tarjeta" style={{ padding: "1rem" }} aria-hidden="true">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="skeleton skeleton-fila" />
-          ))}
-        </div>
+        <SkeletonTabla filas={5} />
+      ) : asistencias.length === 0 ? (
+        <EstadoVacio
+          icono={<IconoLista width={32} height={32} />}
+          mensaje="No hay asistencia registrada para esta fecha."
+        />
       ) : (
       <EnvoltorioTabla>
         <table className="tabla-datos">
@@ -176,7 +185,7 @@ export default function Asistencia() {
           <tbody>
             {asistencias.map((a) => (
               <tr key={a.id}>
-                <td>{a.empleados?.numero_empleado}</td>
+                <td className="num-tabular">{a.empleados?.numero_empleado}</td>
                 <td>{a.empleados ? nombreCompletoEmpleado(a.empleados) : "—"}</td>
                 <td><ChipArea nombre={areas.find((ar) => ar.id === a.area_id)?.nombre ?? "—"} /></td>
                 <td>
@@ -193,13 +202,6 @@ export default function Asistencia() {
                 )}
               </tr>
             ))}
-            {asistencias.length === 0 && (
-              <tr>
-                <td colSpan={esSupervision ? 4 : 5} className="estado-vacio">
-                  No hay asistencia registrada para esta fecha.
-                </td>
-              </tr>
-            )}
           </tbody>
         </table>
       </EnvoltorioTabla>

@@ -18,7 +18,11 @@
   --color-peligro-fondo: #fee2e2;
   --color-neutral-fondo: #e2e8f0;
   --color-neutral-texto: #334155;
-  --radio: 10px;
+  --radio-sm: 8px;
+  --radio-md: 10px;
+  --radio-lg: 16px;
+  --radio: var(--radio-md);
+  --radio-borde: var(--radio-md);
   --sombra: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.06);
   --transicion: 180ms ease;
 }
@@ -374,6 +378,20 @@ button {
   font-family: "Fira Code", monospace;
   font-size: 1.6rem;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.num-tabular {
+  font-variant-numeric: tabular-nums;
+  font-family: "Fira Code", monospace;
+}
+
+.cabecera-pagina h2 {
+  margin: 0 0 0.15rem;
+}
+
+.cabecera-pagina__subtitulo {
+  margin: 0;
 }
 
 .tarjeta-kpi .valor-kpi.diferencia {
@@ -896,6 +914,9 @@ table.tabla-datos tbody tr:hover {
   display: inline-block;
   width: 10px;
   height: 10px;
+  min-width: 10px;
+  min-height: 10px;
+  flex: 0 0 auto;
   border-radius: 50%;
   margin-right: 0.5rem;
   vertical-align: middle;
@@ -905,6 +926,72 @@ table.tabla-datos tbody tr:hover {
 .indicador-color--pendiente { background: var(--color-neutral-texto); }
 .indicador-color--revision { background: var(--color-advertencia); }
 .indicador-color--cancelado { background: var(--color-peligro); }
+
+.tabla-resumen-balance__movil {
+  display: none;
+}
+
+.resumen-estado-card {
+  border: 1px solid var(--color-borde);
+  border-radius: var(--radio);
+  padding: 0.75rem 0.9rem;
+  background: var(--color-fondo);
+}
+
+.resumen-estado-card__cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.resumen-estado-card__estado {
+  display: inline-flex;
+  align-items: center;
+  font-weight: 600;
+  font-size: 0.95rem;
+  min-width: 0;
+}
+
+.resumen-estado-card__total {
+  font-size: 1.05rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.resumen-estado-card__meta {
+  margin: 0.25rem 0 0;
+  font-size: 0.82rem;
+  color: var(--color-texto-suave);
+}
+
+.resumen-estado-card__areas {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem 0.75rem;
+  margin-top: 0.6rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--color-borde);
+}
+
+.resumen-estado-card__area {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.resumen-estado-card__area-nombre {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-texto-suave);
+}
+
+.resumen-estado-card__area .num-tabular {
+  font-size: 0.9rem;
+}
 
 .encabezado-modal {
   display: flex;
@@ -1098,7 +1185,7 @@ table.tabla-datos tbody tr:hover {
 .seccion-horario__titulo {
   margin: 0 0 0.2rem;
   font-size: 1.05rem;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .seccion-horario__ayuda {
@@ -1374,6 +1461,54 @@ table.tabla-datos tbody tr:hover {
   display: flex;
   gap: 0.4rem;
   align-items: center;
+  flex-wrap: wrap;
+}
+
+.acciones-mas {
+  position: relative;
+}
+
+.acciones-mas > summary {
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+}
+
+.acciones-mas > summary::-webkit-details-marker {
+  display: none;
+}
+
+.acciones-mas__menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 8.5rem;
+  padding: 0.45rem;
+  background: var(--color-superficie);
+  border: 1px solid var(--color-borde);
+  border-radius: var(--radio-sm);
+  box-shadow: var(--sombra);
+}
+
+.acciones-secundarias-escritorio {
+  display: contents;
+}
+
+.acciones-mas-movil {
+  display: none;
+}
+
+.fila-notif--nueva {
+  background: #eef4ff;
+  box-shadow: inset 3px 0 0 var(--color-primario);
+}
+
+.fila-notif--nueva td:nth-child(2) {
+  font-weight: 700;
 }
 
 .boton-validar {
@@ -1710,6 +1845,11 @@ table.tabla-datos tbody tr:hover {
     width: 100%;
   }
 
+  /* Selector de área solo en el drawer móvil */
+  .barra-superior__acciones .selector-area {
+    display: none;
+  }
+
   .selector-area {
     align-items: stretch;
     width: 100%;
@@ -1717,6 +1857,50 @@ table.tabla-datos tbody tr:hover {
 
   .selector-area__control {
     min-width: 0;
+    width: 100%;
+  }
+
+  .acciones-secundarias-escritorio {
+    display: none;
+  }
+
+  .acciones-mas-movil {
+    display: block;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .acciones-mas-movil > summary {
+    width: 100%;
+    text-align: center;
+  }
+
+  /* En flujo (no absolute): evita que overflow:hidden de la tarjeta recorte el menú */
+  .acciones-mas-movil .acciones-mas__menu {
+    position: static;
+    right: auto;
+    top: auto;
+    width: 100%;
+    margin-top: 0.35rem;
+    min-width: 0;
+    box-shadow: none;
+  }
+
+  .acciones-inline {
+    width: 100%;
+  }
+
+  .acciones-inline > .boton {
+    flex: 1 1 auto;
+  }
+
+  .envoltorio-tabla--tarjetas .tabla-datos td.fila-acciones .acciones-inline {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .envoltorio-tabla--tarjetas .tabla-datos td.fila-acciones .acciones-inline > .boton,
+  .envoltorio-tabla--tarjetas .tabla-datos td.fila-acciones .acciones-mas-movil > summary {
     width: 100%;
   }
 
@@ -1836,6 +2020,31 @@ table.tabla-datos tbody tr:hover {
   .envoltorio-tabla--tarjetas .tabla-datos td > strong {
     flex: 1;
     text-align: right;
+  }
+
+  /* No estirar puntos de color / chips dentro de celdas-tarjeta */
+  .envoltorio-tabla--tarjetas .tabla-datos td > span.indicador-color {
+    flex: 0 0 auto;
+    width: 10px;
+    height: 10px;
+  }
+
+  .tabla-resumen-balance__escritorio {
+    display: none;
+  }
+
+  .tabla-resumen-balance__movil {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+  }
+
+  .tabla-resumen-balance {
+    padding: 0.9rem;
+  }
+
+  .resumen-estado-card__areas:has(> :only-child) {
+    grid-template-columns: 1fr;
   }
 
   .envoltorio-tabla--tarjetas .tabla-datos td.estado-vacio,

@@ -8,6 +8,9 @@ import EnvoltorioTabla from "../../components/EnvoltorioTabla";
 import Tabs from "../../components/Tabs";
 import Modal from "../../components/Modal";
 import ChipArea from "../../components/ChipArea";
+import EstadoVacio from "../../components/EstadoVacio";
+import SkeletonTabla from "../../components/SkeletonTabla";
+import { IconoEscudo, IconoLista } from "../../components/Iconos";
 import { useToast } from "../../context/ToastContext";
 import { fechaHoyInputCdmx, ordenarRangoFechas } from "../../lib/formato";
 import type { AsistenciaDiaria, PagoCuota } from "../../lib/tipos";
@@ -196,12 +199,22 @@ export default function Auditoria() {
         <h2>Auditoría</h2>
         <div className="grupo-filtros">
           <div className="campo" style={{ marginBottom: 0 }}>
-            <label>Desde</label>
-            <input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} />
+            <label htmlFor="auditoria-filtro-desde">Desde</label>
+            <input
+              id="auditoria-filtro-desde"
+              type="date"
+              value={desde}
+              onChange={(e) => setDesde(e.target.value)}
+            />
           </div>
           <div className="campo" style={{ marginBottom: 0 }}>
-            <label>Hasta</label>
-            <input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} />
+            <label htmlFor="auditoria-filtro-hasta">Hasta</label>
+            <input
+              id="auditoria-filtro-hasta"
+              type="date"
+              value={hasta}
+              onChange={(e) => setHasta(e.target.value)}
+            />
           </div>
         </div>
       </div>
@@ -219,6 +232,14 @@ export default function Auditoria() {
                 Exportar CSV
               </button>
             </div>
+            {cargando ? (
+              <SkeletonTabla filas={6} />
+            ) : logsFiltrados.length === 0 ? (
+              <EstadoVacio
+                icono={<IconoEscudo width={32} height={32} />}
+                mensaje="Sin registros en este rango."
+              />
+            ) : (
             <EnvoltorioTabla>
               <table className="tabla-datos">
                 <thead>
@@ -230,20 +251,12 @@ export default function Auditoria() {
                   </tr>
                 </thead>
                 <tbody>
-                  {cargando && (
-                    <tr>
-                      <td colSpan={4} className="estado-vacio">
-                        Cargando registro de auditoría…
-                      </td>
-                    </tr>
-                  )}
-                  {!cargando &&
-                    logsFiltrados.map((l) => {
+                  {logsFiltrados.map((l) => {
                       const actor = nombreActor(l, perfilesPorId);
                       const esSistema = actor === "Sistema";
                       return (
                         <tr key={l.id}>
-                          <td>{formatoFechaHora(l.creado_en)}</td>
+                          <td className="num-tabular">{formatoFechaHora(l.creado_en)}</td>
                           <td>
                             <span className={esSistema ? "actor-auditoria actor-auditoria--sistema" : "actor-auditoria"}>
                               {actor}
@@ -268,16 +281,10 @@ export default function Auditoria() {
                         </tr>
                       );
                     })}
-                  {!cargando && logsFiltrados.length === 0 && (
-                    <tr>
-                      <td colSpan={4} className="estado-vacio">
-                        Sin registros en este rango.
-                      </td>
-                    </tr>
-                  )}
                 </tbody>
               </table>
             </EnvoltorioTabla>
+            )}
           </>
         )}
 
@@ -288,6 +295,14 @@ export default function Auditoria() {
                 Exportar CSV
               </button>
             </div>
+            {cargando ? (
+              <SkeletonTabla />
+            ) : eliminados.length === 0 ? (
+              <EstadoVacio
+                icono={<IconoLista width={32} height={32} />}
+                mensaje="Sin asistencias eliminadas en este rango."
+              />
+            ) : (
             <EnvoltorioTabla>
               <table className="tabla-datos">
                 <thead>
@@ -302,23 +317,17 @@ export default function Auditoria() {
                 <tbody>
                   {eliminados.map((a) => (
                     <tr key={a.id}>
-                      <td>{a.fecha}</td>
+                      <td className="num-tabular">{a.fecha}</td>
                       <td><ChipArea nombre={nombreArea(a.area_id)} /></td>
                       <td>{a.empleados ? nombreCompletoEmpleado(a.empleados) : "—"}</td>
-                      <td>{formatoFechaHora(a.eliminado_en)}</td>
+                      <td className="num-tabular">{formatoFechaHora(a.eliminado_en)}</td>
                       <td>{a.motivo_eliminacion ?? "—"}</td>
                     </tr>
                   ))}
-                  {!cargando && eliminados.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="estado-vacio">
-                        Sin asistencias eliminadas en este rango.
-                      </td>
-                    </tr>
-                  )}
                 </tbody>
               </table>
             </EnvoltorioTabla>
+            )}
           </>
         )}
 
@@ -329,6 +338,14 @@ export default function Auditoria() {
                 Exportar CSV
               </button>
             </div>
+            {cargando ? (
+              <SkeletonTabla />
+            ) : revertidos.length === 0 ? (
+              <EstadoVacio
+                icono={<IconoLista width={32} height={32} />}
+                mensaje="Sin reversiones en este rango."
+              />
+            ) : (
             <EnvoltorioTabla>
               <table className="tabla-datos">
                 <thead>
@@ -343,23 +360,17 @@ export default function Auditoria() {
                 <tbody>
                   {revertidos.map((p) => (
                     <tr key={p.id}>
-                      <td>{p.fecha}</td>
+                      <td className="num-tabular">{p.fecha}</td>
                       <td><ChipArea nombre={nombreArea(p.area_id)} /></td>
                       <td>{p.empleados ? nombreCompletoEmpleado(p.empleados) : "—"}</td>
-                      <td>{formatoMoneda(p.monto_esperado)}</td>
+                      <td className="num-tabular">{formatoMoneda(p.monto_esperado)}</td>
                       <td>{p.motivo_reversion ?? "—"}</td>
                     </tr>
                   ))}
-                  {!cargando && revertidos.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="estado-vacio">
-                        Sin reversiones en este rango.
-                      </td>
-                    </tr>
-                  )}
                 </tbody>
               </table>
             </EnvoltorioTabla>
+            )}
           </>
         )}
       </Tabs>

@@ -46,8 +46,15 @@ export default function ModalConfirmacion({
       <p className="texto-suave">{mensaje}</p>
       {(motivoObligatorio || motivoOpcional) && (
         <div className="campo">
-          <label>Motivo {motivoObligatorio ? "(obligatorio)" : "(opcional)"}</label>
-          <textarea rows={3} value={motivo} onChange={(e) => setMotivo(e.target.value)} />
+          <label htmlFor="modal-confirmacion-motivo">
+            Motivo {motivoObligatorio ? "(obligatorio)" : "(opcional)"}
+          </label>
+          <textarea
+            id="modal-confirmacion-motivo"
+            rows={3}
+            value={motivo}
+            onChange={(e) => setMotivo(e.target.value)}
+          />
         </div>
       )}
       {error && <p className="mensaje-error">{error}</p>}

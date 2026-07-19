@@ -10,6 +10,9 @@ import Modal from "../../components/Modal";
 import ModalConfirmacion from "../../components/ModalConfirmacion";
 import EnvoltorioTabla from "../../components/EnvoltorioTabla";
 import ChipArea from "../../components/ChipArea";
+import EstadoVacio from "../../components/EstadoVacio";
+import SkeletonTabla from "../../components/SkeletonTabla";
+import { IconoUsuarios } from "../../components/Iconos";
 import type { BuscarEmpleadoRespuesta, Empleado, EmpleadoOtraArea, PreferenciaNombre, RespuestaRpc } from "../../lib/tipos";
 
 interface FormularioEmpleado {
@@ -120,6 +123,14 @@ export default function Empleados() {
         )}
       </div>
 
+      {cargando ? (
+        <SkeletonTabla filas={6} />
+      ) : empleados.length === 0 ? (
+        <EstadoVacio
+          icono={<IconoUsuarios width={32} height={32} />}
+          mensaje={`No hay empleados registrados${areaUnica ? " en esta área" : ""}.`}
+        />
+      ) : (
       <EnvoltorioTabla>
         <table className="tabla-datos">
           <thead>
@@ -134,7 +145,7 @@ export default function Empleados() {
           <tbody>
             {empleados.map((e) => (
               <tr key={e.id}>
-                <td>{e.numero_empleado}</td>
+                <td className="num-tabular">{e.numero_empleado}</td>
                 <td>{nombreCompletoEmpleado(e)}</td>
                 <td><ChipArea nombre={nombreArea(e.area_id)} /></td>
                 <td>
@@ -156,16 +167,10 @@ export default function Empleados() {
                 )}
               </tr>
             ))}
-            {!cargando && empleados.length === 0 && (
-              <tr>
-                <td colSpan={esSupervision ? 4 : 5} className="estado-vacio">
-                  No hay empleados registrados{areaUnica ? " en esta área" : ""}.
-                </td>
-              </tr>
-            )}
           </tbody>
         </table>
       </EnvoltorioTabla>
+      )}
 
       {esAdminArea && (
         <section className="seccion-panel">
@@ -173,6 +178,14 @@ export default function Empleados() {
           <p className="texto-suave" style={{ marginBottom: "0.75rem" }}>
             Aquí puedes solicitar que un empleado de otra área se incorpore a {nombreArea(miAreaId ?? "")}.
           </p>
+          {cargandoOtras ? (
+            <SkeletonTabla />
+          ) : empleadosOtrasAreas.length === 0 ? (
+            <EstadoVacio
+              icono={<IconoUsuarios width={32} height={32} />}
+              mensaje="No hay empleados activos en otras áreas."
+            />
+          ) : (
           <EnvoltorioTabla>
             <table className="tabla-datos">
               <thead>
@@ -186,7 +199,7 @@ export default function Empleados() {
               <tbody>
                 {empleadosOtrasAreas.map((e) => (
                   <tr key={e.id}>
-                    <td>{e.numero_empleado}</td>
+                    <td className="num-tabular">{e.numero_empleado}</td>
                     <td>{nombreCompletoEmpleado(e)}</td>
                     <td><ChipArea nombre={e.area_nombre} /></td>
                     <td className="fila-acciones">
@@ -196,16 +209,10 @@ export default function Empleados() {
                     </td>
                   </tr>
                 ))}
-                {!cargandoOtras && empleadosOtrasAreas.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="estado-vacio">
-                      No hay empleados activos en otras áreas.
-                    </td>
-                  </tr>
-                )}
               </tbody>
             </table>
           </EnvoltorioTabla>
+          )}
         </section>
       )}
 

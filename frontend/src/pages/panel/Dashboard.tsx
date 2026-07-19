@@ -36,6 +36,8 @@ import EnvoltorioTabla from "../../components/EnvoltorioTabla";
 import Tabs from "../../components/Tabs";
 import ChipArea from "../../components/ChipArea";
 import Modal from "../../components/Modal";
+import EstadoVacio from "../../components/EstadoVacio";
+import SkeletonTabla from "../../components/SkeletonTabla";
 import GraficaEvolucionDiaria from "../../components/GraficaEvolucionDiaria";
 import IndicadorTendencia from "../../components/IndicadorTendencia";
 import { IconoMoneda, IconoBillete, IconoCheck, IconoLista } from "../../components/Iconos";
@@ -47,24 +49,11 @@ import type { PagoCuota } from "../../lib/tipos";
 /* ------------------------------------------------------------------ */
 type FiltroDrillDown = "todos" | "pendiente" | "en_revision" | "con_marcado" | "sin_marcado";
 
-/* ------------------------------------------------------------------ */
-/* Skeletons reutilizables                                             */
-/* ------------------------------------------------------------------ */
 function SkeletonKpi() {
   return (
     <div className="tarjeta tarjeta-kpi">
       <div className="skeleton skeleton-texto" style={{ width: "50%" }} />
       <div className="skeleton skeleton-kpi" />
-    </div>
-  );
-}
-
-function SkeletonTabla({ filas = 4 }: { filas?: number }) {
-  return (
-    <div style={{ padding: "1rem" }}>
-      {Array.from({ length: filas }).map((_, i) => (
-        <div key={i} className="skeleton skeleton-fila" />
-      ))}
     </div>
   );
 }
@@ -127,7 +116,9 @@ function TablaResumenEstado({
   return (
     <div className="tarjeta tabla-resumen-balance">
       <div className="tabla-resumen-balance__titulo">Resumen por estado</div>
-      <EnvoltorioTabla>
+
+      {/* Escritorio: tabla compacta */}
+      <div className="tabla-resumen-balance__escritorio envoltorio-tabla">
         <table className="tabla-datos">
           <thead>
             <tr>
@@ -143,19 +134,47 @@ function TablaResumenEstado({
             {datos.map((d) => (
               <tr key={d.estado}>
                 <td>
-                  <span className={`indicador-color ${CLASE_INDICADOR_ESTADO[d.estado]}`} />
+                  <span className={`indicador-color ${CLASE_INDICADOR_ESTADO[d.estado]}`} aria-hidden="true" />
                   {d.etiqueta}
                 </td>
-                <td>{d.conteo}</td>
+                <td className="num-tabular">{d.conteo}</td>
                 {d.porArea.map((m, i) => (
-                  <td key={areasPresentes[i].id}>{formatoMoneda(m)}</td>
+                  <td key={areasPresentes[i].id} className="num-tabular">{formatoMoneda(m)}</td>
                 ))}
-                <td><strong>{formatoMoneda(d.total)}</strong></td>
+                <td className="num-tabular"><strong>{formatoMoneda(d.total)}</strong></td>
               </tr>
             ))}
           </tbody>
         </table>
-      </EnvoltorioTabla>
+      </div>
+
+      {/* Móvil: tarjetas densas (evita el apilado genérico tabla→tarjeta) */}
+      <div className="tabla-resumen-balance__movil" role="list">
+        {datos.map((d) => (
+          <article key={d.estado} className="resumen-estado-card" role="listitem">
+            <header className="resumen-estado-card__cabecera">
+              <span className="resumen-estado-card__estado">
+                <span className={`indicador-color ${CLASE_INDICADOR_ESTADO[d.estado]}`} aria-hidden="true" />
+                {d.etiqueta}
+              </span>
+              <strong className="resumen-estado-card__total num-tabular">{formatoMoneda(d.total)}</strong>
+            </header>
+            <p className="resumen-estado-card__meta">
+              {d.conteo} cuota{d.conteo !== 1 ? "s" : ""}
+            </p>
+            {areasPresentes.length > 0 && (
+              <div className="resumen-estado-card__areas">
+                {areasPresentes.map((area, i) => (
+                  <div key={area.id} className="resumen-estado-card__area">
+                    <span className="resumen-estado-card__area-nombre">{nombreArea(area.id)}</span>
+                    <span className="num-tabular">{formatoMoneda(d.porArea[i])}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </article>
+        ))}
+      </div>
     </div>
   );
 }
@@ -444,10 +463,10 @@ export default function Dashboard() {
       {/* HERO — Periodo contable abierto                              */}
       {/* =========================================================== */}
       <div className="barra-herramientas">
-        <div>
-          <h2 style={{ marginBottom: "0.15rem" }}>Balance</h2>
+        <div className="cabecera-pagina">
+          <h2>Balance</h2>
           {subtituloPeriodo && (
-            <p className="texto-suave" style={{ margin: 0, fontSize: "0.85rem" }}>
+            <p className="texto-suave cabecera-pagina__subtitulo" style={{ fontSize: "0.85rem" }}>
               {subtituloPeriodo}
             </p>
           )}
@@ -509,6 +528,7 @@ export default function Dashboard() {
             onClick={() => abrirDrillDown("pendiente")}
             role="button"
             tabIndex={0}
+            aria-label="Ver detalle: falta por cobrar"
             onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); abrirDrillDown("pendiente"); } }}
           >
             <div className="etiqueta-kpi">Falta por cobrar</div>
@@ -522,6 +542,7 @@ export default function Dashboard() {
             onClick={() => abrirDrillDown("en_revision")}
             role="button"
             tabIndex={0}
+            aria-label="Ver detalle: en revisión"
             onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); abrirDrillDown("en_revision"); } }}
           >
             <div className="etiqueta-kpi">En revisión</div>
@@ -607,8 +628,12 @@ export default function Dashboard() {
             </p>
             <div className="grupo-filtros">
               <div className="campo" style={{ marginBottom: 0 }}>
-                <label>Periodo</label>
-                <select value={periodo} onChange={(e) => setPeriodo(e.target.value as PeriodoBalance)}>
+                <label htmlFor="balance-filtro-periodo">Periodo</label>
+                <select
+                  id="balance-filtro-periodo"
+                  value={periodo}
+                  onChange={(e) => setPeriodo(e.target.value as PeriodoBalance)}
+                >
                   <option value="dia">Hoy</option>
                   <option value="semana">Esta semana</option>
                   <option value="mes">Este mes</option>
@@ -618,16 +643,18 @@ export default function Dashboard() {
               {periodo === "rango" && (
                 <>
                   <div className="campo" style={{ marginBottom: 0 }}>
-                    <label>Desde</label>
+                    <label htmlFor="balance-filtro-desde">Desde</label>
                     <input
+                      id="balance-filtro-desde"
                       type="date"
                       value={rangoManual.desde}
                       onChange={(e) => setRangoManual((r) => ({ ...r, desde: e.target.value }))}
                     />
                   </div>
                   <div className="campo" style={{ marginBottom: 0 }}>
-                    <label>Hasta</label>
+                    <label htmlFor="balance-filtro-hasta">Hasta</label>
                     <input
+                      id="balance-filtro-hasta"
                       type="date"
                       value={rangoManual.hasta}
                       onChange={(e) => setRangoManual((r) => ({ ...r, hasta: e.target.value }))}
@@ -692,10 +719,10 @@ export default function Dashboard() {
                 {cargandoHistorico ? (
                   <SkeletonTabla />
                 ) : pendientesHistorico.length === 0 ? (
-                  <div className="estado-vacio-ilustrado">
-                    <span className="icono-vacio"><IconoCheck width={32} height={32} /></span>
-                    <p>No hay pagos pendientes en este periodo.</p>
-                  </div>
+                  <EstadoVacio
+                    icono={<IconoCheck width={32} height={32} />}
+                    mensaje="No hay pagos pendientes en este periodo."
+                  />
                 ) : (
                   <TablaResumenHistorico pagos={pendientesHistorico} nombreArea={nombreArea} esSupervision={esSupervision} rango={rangoHistorico} />
                 )}
@@ -706,10 +733,10 @@ export default function Dashboard() {
                 {cargandoHistorico ? (
                   <SkeletonTabla filas={6} />
                 ) : pagosHistorico.length === 0 ? (
-                  <div className="estado-vacio-ilustrado">
-                    <span className="icono-vacio"><IconoLista width={32} height={32} /></span>
-                    <p>No hay pagos registrados en este periodo.</p>
-                  </div>
+                  <EstadoVacio
+                    icono={<IconoLista width={32} height={32} />}
+                    mensaje="No hay pagos registrados en este periodo."
+                  />
                 ) : (
                   <TablaResumenHistorico pagos={pagosHistorico} nombreArea={nombreArea} esSupervision={esSupervision} rango={rangoHistorico} soloLectura />
                 )}
@@ -745,10 +772,10 @@ export default function Dashboard() {
           </div>
 
           {pagosDrillDownFiltrados.length === 0 ? (
-            <div className="estado-vacio-ilustrado">
-              <span className="icono-vacio"><IconoCheck width={32} height={32} /></span>
-              <p>No hay registros con este filtro.</p>
-            </div>
+            <EstadoVacio
+              icono={<IconoCheck width={32} height={32} />}
+              mensaje="No hay registros con este filtro."
+            />
           ) : (
             <EnvoltorioTabla>
               <table className="tabla-datos">

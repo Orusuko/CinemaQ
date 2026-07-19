@@ -6,6 +6,9 @@ import { llamarEdgeFunction } from "../../lib/edgeFunctions";
 import Modal from "../../components/Modal";
 import EnvoltorioTabla from "../../components/EnvoltorioTabla";
 import ChipArea from "../../components/ChipArea";
+import EstadoVacio from "../../components/EstadoVacio";
+import SkeletonTabla from "../../components/SkeletonTabla";
+import { IconoEngranaje } from "../../components/Iconos";
 import type { Perfil, RolPerfil } from "../../lib/tipos";
 
 const ETIQUETAS_ROL: Record<RolPerfil, string> = {
@@ -57,6 +60,14 @@ export default function Usuarios() {
         </button>
       </div>
 
+      {cargando ? (
+        <SkeletonTabla />
+      ) : usuarios.length === 0 ? (
+        <EstadoVacio
+          icono={<IconoEngranaje width={32} height={32} />}
+          mensaje="No hay usuarios registrados todavía."
+        />
+      ) : (
       <EnvoltorioTabla>
         <table className="tabla-datos">
           <thead>
@@ -91,16 +102,10 @@ export default function Usuarios() {
                 </td>
               </tr>
             ))}
-            {!cargando && usuarios.length === 0 && (
-              <tr>
-                <td colSpan={6} className="estado-vacio">
-                  No hay usuarios registrados todavía.
-                </td>
-              </tr>
-            )}
           </tbody>
         </table>
       </EnvoltorioTabla>
+      )}
 
       {mostrarCrear && (
         <ModalUsuario

@@ -10,6 +10,9 @@ import { mensajeErrorConsulta } from "../../lib/consulta";
 import EnvoltorioTabla from "../../components/EnvoltorioTabla";
 import ChipArea from "../../components/ChipArea";
 import Modal from "../../components/Modal";
+import EstadoVacio from "../../components/EstadoVacio";
+import SkeletonTabla from "../../components/SkeletonTabla";
+import { IconoArchivo } from "../../components/Iconos";
 import type { CierrePeriodo, RespuestaRpc } from "../../lib/tipos";
 
 export default function Cierres() {
@@ -112,6 +115,14 @@ export default function Cierres() {
         Un cierre es un corte contable (snapshot); no bloquea seguir validando o revirtiendo pagos de esas fechas.
       </p>
 
+      {cargando ? (
+        <SkeletonTabla />
+      ) : grupos.length === 0 ? (
+        <EstadoVacio
+          icono={<IconoArchivo width={32} height={32} />}
+          mensaje="No hay cierres registrados todavía."
+        />
+      ) : (
       <EnvoltorioTabla>
         <table className="tabla-datos">
           <thead>
@@ -131,7 +142,7 @@ export default function Cierres() {
               const validado = grupo.reduce((s, c) => s + Number(c.monto_validado_total), 0);
               return (
                 <tr key={clave}>
-                  <td>
+                  <td className="num-tabular">
                     {formatoFecha(grupo[0].desde)} — {formatoFecha(grupo[0].hasta)}
                   </td>
                   <td className="celda-chips-area">
@@ -139,12 +150,12 @@ export default function Cierres() {
                       <ChipArea key={c.id} nombre={nombreArea(c.area_id)} />
                     ))}
                   </td>
-                  <td>{formatoMoneda(esperado)}</td>
-                  <td>{formatoMoneda(validado)}</td>
+                  <td className="num-tabular">{formatoMoneda(esperado)}</td>
+                  <td className="num-tabular">{formatoMoneda(validado)}</td>
                   <td className="valor-kpi diferencia" style={{ fontSize: "1rem" }}>
                     {formatoMoneda(esperado - validado)}
                   </td>
-                  <td>{formatoFecha(grupo[0].cerrado_en.slice(0, 10))}</td>
+                  <td className="num-tabular">{formatoFecha(grupo[0].cerrado_en.slice(0, 10))}</td>
                   <td>
                     <button className="boton boton-chico boton-secundario" onClick={() => descargarGrupo(grupo)}>
                       Descargar CSV
@@ -153,16 +164,10 @@ export default function Cierres() {
                 </tr>
               );
             })}
-            {!cargando && grupos.length === 0 && (
-              <tr>
-                <td colSpan={7} className="estado-vacio">
-                  No hay cierres registrados todavía.
-                </td>
-              </tr>
-            )}
           </tbody>
         </table>
       </EnvoltorioTabla>
+      )}
 
       {mostrarNuevo && (
         <ModalCerrarPeriodo
@@ -212,12 +217,25 @@ function ModalCerrarPeriodo({
         Se generará un corte de ambas áreas para el rango seleccionado. No se permite traslapar con un cierre ya existente.
       </p>
       <div className="campo">
-        <label>Desde</label>
-        <input type="date" value={desde} max={hasta} onChange={(e) => setDesde(e.target.value)} />
+        <label htmlFor="cierre-periodo-desde">Desde</label>
+        <input
+          id="cierre-periodo-desde"
+          type="date"
+          value={desde}
+          max={hasta}
+          onChange={(e) => setDesde(e.target.value)}
+        />
       </div>
       <div className="campo">
-        <label>Hasta</label>
-        <input type="date" value={hasta} min={desde} max={fechaHoyInputCdmx()} onChange={(e) => setHasta(e.target.value)} />
+        <label htmlFor="cierre-periodo-hasta">Hasta</label>
+        <input
+          id="cierre-periodo-hasta"
+          type="date"
+          value={hasta}
+          min={desde}
+          max={fechaHoyInputCdmx()}
+          onChange={(e) => setHasta(e.target.value)}
+        />
       </div>
       {error && <p className="mensaje-error">{error}</p>}
       <div className="fila-acciones" style={{ justifyContent: "flex-end" }}>

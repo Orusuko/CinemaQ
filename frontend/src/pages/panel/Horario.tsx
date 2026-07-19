@@ -8,7 +8,9 @@ import { fechaHoyInputCdmx, nombreCompletoEmpleado, nombrePublicoEmpleado } from
 import { mensajeErrorConsulta } from "../../lib/consulta";
 import EnvoltorioTabla from "../../components/EnvoltorioTabla";
 import ChipArea from "../../components/ChipArea";
-import { IconoCheck } from "../../components/Iconos";
+import EstadoVacio from "../../components/EstadoVacio";
+import SkeletonTabla from "../../components/SkeletonTabla";
+import { IconoCheck, IconoLista, IconoUsuarios } from "../../components/Iconos";
 import { abrirCineConEmpleados } from "../../lib/cineHorarios";
 import type { Empleado, HorarioDiario, RespuestaRpc } from "../../lib/tipos";
 
@@ -216,16 +218,21 @@ export default function Horario() {
   return (
     <div>
       <div className="barra-herramientas">
-        <div>
-          <h2 style={{ marginBottom: "0.15rem" }}>Horario del día</h2>
-          <p className="texto-suave" style={{ margin: 0 }}>
+        <div className="cabecera-pagina">
+          <h2>Horario del día</h2>
+          <p className="texto-suave cabecera-pagina__subtitulo">
             Enrolar y confirmar asistencia del día. Para altas tardías o bajas usa Asistencia.
           </p>
         </div>
         <div className="grupo-filtros">
           <div className="campo" style={{ marginBottom: 0 }}>
-            <label>Fecha</label>
-            <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
+            <label htmlFor="horario-filtro-fecha">Fecha</label>
+            <input
+              id="horario-filtro-fecha"
+              type="date"
+              value={fecha}
+              onChange={(e) => setFecha(e.target.value)}
+            />
           </div>
           {!esSupervision && (
             <button
@@ -261,11 +268,16 @@ export default function Horario() {
         </div>
 
         {cargando ? (
-          <div className="tarjeta" style={{ padding: "1rem" }} aria-hidden="true">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="skeleton skeleton-fila" />
-            ))}
-          </div>
+          <SkeletonTabla filas={5} />
+        ) : empleadosSinHorario.length === 0 ? (
+          <EstadoVacio
+            icono={<IconoUsuarios width={32} height={32} />}
+            mensaje={
+              empleados.length === 0
+                ? "No hay empleados activos en esta área."
+                : "Todos los empleados activos ya están en el horario de este día."
+            }
+          />
         ) : (
         <EnvoltorioTabla>
           <table className="tabla-datos">
@@ -280,7 +292,7 @@ export default function Horario() {
             <tbody>
               {empleadosSinHorario.map((e) => (
                 <tr key={e.id}>
-                  <td>{e.numero_empleado}</td>
+                  <td className="num-tabular">{e.numero_empleado}</td>
                   <td>{nombreCompletoEmpleado(e)}</td>
                   <td><ChipArea nombre={nombreArea(e.area_id)} /></td>
                   {!esSupervision && (
@@ -296,15 +308,6 @@ export default function Horario() {
                   )}
                 </tr>
               ))}
-              {empleadosSinHorario.length === 0 && (
-                <tr>
-                  <td colSpan={esSupervision ? 3 : 4} className="estado-vacio">
-                    {empleados.length === 0
-                      ? "No hay empleados activos en esta área."
-                      : "Todos los empleados activos ya están en el horario de este día."}
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </EnvoltorioTabla>
@@ -345,11 +348,12 @@ export default function Horario() {
         </div>
 
         {cargando ? (
-          <div className="tarjeta" style={{ padding: "1rem" }} aria-hidden="true">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="skeleton skeleton-fila" />
-            ))}
-          </div>
+          <SkeletonTabla />
+        ) : empleadosEnHorario.length === 0 ? (
+          <EstadoVacio
+            icono={<IconoLista width={32} height={32} />}
+            mensaje="Aún no hay nadie en el horario. Agrega empleados en el paso 1."
+          />
         ) : (
         <EnvoltorioTabla>
           <table className="tabla-datos">
@@ -388,7 +392,7 @@ export default function Horario() {
                         <span className="texto-suave">Pendiente</span>
                       )}
                     </td>
-                    <td>{e.numero_empleado}</td>
+                    <td className="num-tabular">{e.numero_empleado}</td>
                     <td>{nombreCompletoEmpleado(e)}</td>
                     <td><ChipArea nombre={nombreArea(e.area_id)} /></td>
                     {!esSupervision && (
@@ -410,13 +414,6 @@ export default function Horario() {
                   </tr>
                 );
               })}
-              {empleadosEnHorario.length === 0 && (
-                <tr>
-                  <td colSpan={esSupervision ? 4 : 5} className="estado-vacio">
-                    Aún no hay nadie en el horario. Agrega empleados en el paso 1.
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </EnvoltorioTabla>

@@ -11,6 +11,9 @@ import {
   resolverEnlaceNotificacion,
 } from "../../lib/enlaceNotificacion";
 import EnvoltorioTabla from "../../components/EnvoltorioTabla";
+import EstadoVacio from "../../components/EstadoVacio";
+import SkeletonTabla from "../../components/SkeletonTabla";
+import { IconoCampana } from "../../components/Iconos";
 import type { Notificacion } from "../../lib/tipos";
 
 export default function Notificaciones() {
@@ -117,11 +120,12 @@ export default function Notificaciones() {
       </div>
 
       {cargando ? (
-        <div className="tarjeta" style={{ padding: "1rem" }} aria-hidden="true">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="skeleton skeleton-fila" />
-          ))}
-        </div>
+        <SkeletonTabla filas={6} />
+      ) : notificaciones.length === 0 ? (
+        <EstadoVacio
+          icono={<IconoCampana width={32} height={32} />}
+          mensaje="No tienes notificaciones."
+        />
       ) : (
       <EnvoltorioTabla>
         <table className="tabla-datos">
@@ -136,7 +140,7 @@ export default function Notificaciones() {
           </thead>
           <tbody>
             {notificaciones.map((n) => (
-              <tr key={n.id} style={{ fontWeight: n.leida ? 400 : 700 }}>
+              <tr key={n.id} className={!n.leida ? "fila-notif--nueva" : undefined}>
                 <td>{!n.leida && <span className="etiqueta etiqueta-advertencia">Nueva</span>}</td>
                 <td>
                   <button
@@ -151,7 +155,7 @@ export default function Notificaciones() {
                 <td>
                   <span className="celda-mensaje-notif" title={n.mensaje}>{n.mensaje}</span>
                 </td>
-                <td>{formatoFechaHora(n.creado_en)}</td>
+                <td className="num-tabular">{formatoFechaHora(n.creado_en)}</td>
                 <td className="fila-acciones">
                   <div className="acciones-inline">
                     <button
@@ -174,13 +178,6 @@ export default function Notificaciones() {
                 </td>
               </tr>
             ))}
-            {notificaciones.length === 0 && (
-              <tr>
-                <td colSpan={5} className="estado-vacio">
-                  No tienes notificaciones.
-                </td>
-              </tr>
-            )}
           </tbody>
         </table>
       </EnvoltorioTabla>

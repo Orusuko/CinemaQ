@@ -27,16 +27,16 @@ const ETIQUETAS_ROL: Record<string, string> = {
   supervision: "Supervisión",
 };
 
-function SelectorArea() {
+function SelectorArea({ idControl }: { idControl: string }) {
   const { areas, areaSeleccionada, setAreaSeleccionada, puedeElegirArea } = useArea();
   if (!puedeElegirArea) return null;
   return (
     <div className="selector-area">
-      <label className="selector-area__etiqueta" htmlFor="selector-area-panel">
+      <label className="selector-area__etiqueta" htmlFor={idControl}>
         Área
       </label>
       <select
-        id="selector-area-panel"
+        id={idControl}
         className="selector-area__control"
         value={areaSeleccionada}
         onChange={(e) => setAreaSeleccionada(e.target.value)}
@@ -158,7 +158,7 @@ function ContenidoPanel() {
           </button>
         </div>
         <div className="barra-lateral__selector-area-movil">
-          <SelectorArea />
+          <SelectorArea idControl="selector-area-movil" />
         </div>
         <div className="marca marca--escritorio">Cuotas Propinas</div>
         <nav aria-label="Menú principal">
@@ -244,7 +244,7 @@ function ContenidoPanel() {
             <div className="texto-suave">{perfil ? ETIQUETAS_ROL[perfil.rol] : ""}</div>
           </div>
           <div className="barra-superior__acciones">
-            <SelectorArea />
+            <SelectorArea idControl="selector-area-panel" />
           </div>
         </div>
         <div className="area-principal">

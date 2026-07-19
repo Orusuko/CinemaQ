@@ -12,6 +12,8 @@ function Base(props: SVGProps<SVGSVGElement>) {
       stroke="currentColor"
       width={20}
       height={20}
+      aria-hidden="true"
+      focusable="false"
       {...props}
     />
   );

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
 import { useAuth } from "../../context/AuthContext";
@@ -12,18 +12,115 @@ import Modal from "../../components/Modal";
 import EnvoltorioTabla from "../../components/EnvoltorioTabla";
 import Tabs from "../../components/Tabs";
 import ChipArea from "../../components/ChipArea";
+import EstadoVacio from "../../components/EstadoVacio";
+import SkeletonTabla from "../../components/SkeletonTabla";
 import { IconoCheck, IconoLista } from "../../components/Iconos";
 import type { Empleado, PagoCuota, RespuestaRpc } from "../../lib/tipos";
 
-/* ------------------------------------------------------------------ */
-/* Skeletons                                                            */
-/* ------------------------------------------------------------------ */
-function SkeletonTabla({ filas = 4 }: { filas?: number }) {
+function AccionesRevision({
+  pago,
+  procesando,
+  onValidar,
+  onRechazar,
+  onEliminar,
+}: {
+  pago: PagoCuota;
+  procesando: boolean;
+  onValidar: () => void;
+  onRechazar: () => void;
+  onEliminar: () => void;
+}) {
+  const masRef = useRef<HTMLDetailsElement>(null);
+  const puedeRechazar = pago.estado === "marcado_pendiente_validacion";
+
+  function cerrarMas() {
+    if (masRef.current) masRef.current.open = false;
+  }
+
+  function conCierre(accion: () => void) {
+    return () => {
+      cerrarMas();
+      accion();
+    };
+  }
+
   return (
-    <div style={{ padding: "1rem" }}>
-      {Array.from({ length: filas }).map((_, i) => (
-        <div key={i} className="skeleton skeleton-fila" />
-      ))}
+    <div className="acciones-inline">
+      <button className="boton boton-chico boton-validar" disabled={procesando} onClick={onValidar}>
+        {procesando ? "…" : "✓ Validar"}
+      </button>
+      <div className="acciones-secundarias-escritorio">
+        {puedeRechazar && (
+          <button className="boton boton-chico boton-rechazar" disabled={procesando} onClick={onRechazar}>
+            ✗ Rechazar
+          </button>
+        )}
+        <button className="boton boton-chico boton-peligro" disabled={procesando} onClick={onEliminar}>
+          Eliminar
+        </button>
+      </div>
+      <details ref={masRef} className="acciones-mas acciones-mas-movil">
+        <summary className="boton boton-chico boton-secundario">Más</summary>
+        <div className="acciones-mas__menu">
+          {puedeRechazar && (
+            <button
+              className="boton boton-chico boton-rechazar"
+              disabled={procesando}
+              onClick={conCierre(onRechazar)}
+            >
+              ✗ Rechazar
+            </button>
+          )}
+          <button
+            className="boton boton-chico boton-peligro"
+            disabled={procesando}
+            onClick={conCierre(onEliminar)}
+          >
+            Eliminar
+          </button>
+        </div>
+      </details>
+    </div>
+  );
+}
+
+function AccionesValidados({
+  onRevertir,
+  onEliminar,
+}: {
+  onRevertir: () => void;
+  onEliminar: () => void;
+}) {
+  const masRef = useRef<HTMLDetailsElement>(null);
+
+  function cerrarMas() {
+    if (masRef.current) masRef.current.open = false;
+  }
+
+  return (
+    <div className="acciones-inline">
+      <button className="boton boton-chico boton-secundario" onClick={onRevertir}>
+        Revertir
+      </button>
+      <div className="acciones-secundarias-escritorio">
+        <button className="boton boton-chico boton-peligro" onClick={onEliminar}>
+          Eliminar
+        </button>
+      </div>
+      <details ref={masRef} className="acciones-mas acciones-mas-movil">
+        <summary className="boton boton-chico boton-secundario">Más</summary>
+        <div className="acciones-mas__menu">
+          <button
+            className="boton boton-chico boton-peligro"
+            onClick={() => {
+              cerrarMas();
+              onEliminar();
+            }}
+          >
+            Eliminar
+          </button>
+        </div>
+      </details>
     </div>
   );
 }
@@ -205,8 +302,12 @@ export default function Pagos() {
         <h2>Pagos</h2>
         <div className="grupo-filtros">
           <div className="campo" style={{ marginBottom: 0 }}>
-            <label>Desde</label>
-            <input type="date" value={desde} onChange={(e) => {
+            <label htmlFor="pagos-filtro-desde">Desde</label>
+            <input
+              id="pagos-filtro-desde"
+              type="date"
+              value={desde}
+              onChange={(e) => {
               const valor = e.target.value;
               setDesde(valor);
               setSearchParams((prev) => {
@@ -217,8 +318,12 @@ export default function Pagos() {
             }} />
           </div>
           <div className="campo" style={{ marginBottom: 0 }}>
-            <label>Hasta</label>
-            <input type="date" value={hasta} onChange={(e) => {
+            <label htmlFor="pagos-filtro-hasta">Hasta</label>
+            <input
+              id="pagos-filtro-hasta"
+              type="date"
+              value={hasta}
+              onChange={(e) => {
               const valor = e.target.value;
               setHasta(valor);
               setSearchParams((prev) => {
@@ -249,10 +354,10 @@ export default function Pagos() {
             {cargando ? (
               <SkeletonTabla />
             ) : enRevisionYPendientes.length === 0 ? (
-              <div className="estado-vacio-ilustrado">
-                <span className="icono-vacio"><IconoCheck width={32} height={32} /></span>
-                <p>No hay pagos pendientes o en revisión en este rango.</p>
-              </div>
+              <EstadoVacio
+                icono={<IconoCheck width={32} height={32} />}
+                mensaje="No hay pagos pendientes o en revisión en este rango."
+              />
             ) : (
               <EnvoltorioTabla>
                 <table className="tabla-datos">
@@ -276,39 +381,21 @@ export default function Pagos() {
                       >
                         <td>{p.empleados ? nombreCompletoEmpleado(p.empleados) : "—"}</td>
                         <td><ChipArea nombre={nombreArea(p.area_id)} /></td>
-                        <td>{formatoFecha(p.fecha)}</td>
-                        <td>{formatoMoneda(p.monto_esperado)}</td>
+                        <td className="num-tabular">{formatoFecha(p.fecha)}</td>
+                        <td className="num-tabular">{formatoMoneda(p.monto_esperado)}</td>
                         <td>
                           <span className={claseEstadoPago(p.estado)}>{ETIQUETAS_ESTADO_PAGO[p.estado]}</span>
                         </td>
                         <td>{p.marcado_por_empleado ? formatoFechaHora(p.marcado_empleado_en) : "No marcado"}</td>
                         {!esSupervision && (
                           <td className="fila-acciones">
-                            <div className="acciones-inline">
-                              <button
-                                className="boton boton-chico boton-validar"
-                                disabled={procesandoId === p.id}
-                                onClick={() => validarPago(p.id)}
-                              >
-                                {procesandoId === p.id ? "…" : "✓ Validar"}
-                              </button>
-                              {p.estado === "marcado_pendiente_validacion" && (
-                                <button
-                                  className="boton boton-chico boton-rechazar"
-                                  disabled={procesandoId === p.id}
-                                  onClick={() => setARechazar(p)}
-                                >
-                                  ✗ Rechazar
-                                </button>
-                              )}
-                              <button
-                                className="boton boton-chico boton-peligro"
-                                disabled={procesandoId === p.id}
-                                onClick={() => setAEliminar(p)}
-                              >
-                                Eliminar
-                              </button>
-                            </div>
+                            <AccionesRevision
+                              pago={p}
+                              procesando={procesandoId === p.id}
+                              onValidar={() => validarPago(p.id)}
+                              onRechazar={() => setARechazar(p)}
+                              onEliminar={() => setAEliminar(p)}
+                            />
                           </td>
                         )}
                       </tr>
@@ -325,10 +412,10 @@ export default function Pagos() {
             {cargando ? (
               <SkeletonTabla filas={6} />
             ) : validados.length === 0 ? (
-              <div className="estado-vacio-ilustrado">
-                <span className="icono-vacio"><IconoLista width={32} height={32} /></span>
-                <p>No hay pagos validados en este rango.</p>
-              </div>
+              <EstadoVacio
+                icono={<IconoLista width={32} height={32} />}
+                mensaje="No hay pagos validados en este rango."
+              />
             ) : (
               <EnvoltorioTabla>
                 <table className="tabla-datos">
@@ -352,20 +439,16 @@ export default function Pagos() {
                       >
                         <td>{p.empleados ? nombreCompletoEmpleado(p.empleados) : "—"}</td>
                         <td><ChipArea nombre={nombreArea(p.area_id)} /></td>
-                        <td>{formatoFecha(p.fecha)}</td>
-                        <td>{formatoMoneda(p.monto_esperado)}</td>
-                        <td>{formatoFechaHora(p.validado_en)}</td>
+                        <td className="num-tabular">{formatoFecha(p.fecha)}</td>
+                        <td className="num-tabular">{formatoMoneda(p.monto_esperado)}</td>
+                        <td className="num-tabular">{formatoFechaHora(p.validado_en)}</td>
                         <td>{p.origen === "manual_admin" ? "Manual" : "Flujo normal"}</td>
                         {!esSupervision && (
                           <td className="fila-acciones">
-                            <div className="acciones-inline">
-                              <button className="boton boton-chico boton-secundario" onClick={() => setARevertir(p)}>
-                                Revertir
-                              </button>
-                              <button className="boton boton-chico boton-peligro" onClick={() => setAEliminar(p)}>
-                                Eliminar
-                              </button>
-                            </div>
+                            <AccionesValidados
+                              onRevertir={() => setARevertir(p)}
+                              onEliminar={() => setAEliminar(p)}
+                            />
                           </td>
                         )}
                       </tr>

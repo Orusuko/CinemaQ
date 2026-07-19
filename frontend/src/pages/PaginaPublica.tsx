@@ -144,7 +144,12 @@ export default function PaginaPublica() {
                 aria-controls="lista-autocompletado"
                 aria-activedescendant={indiceResaltado >= 0 ? `opcion-${indiceResaltado}` : undefined}
                 aria-autocomplete="list"
+                disabled={cargandoLista}
+                aria-busy={cargandoLista}
               />
+              {cargandoLista && (
+                <p className="texto-suave" role="status">Cargando empleados…</p>
+              )}
               {resultados.length > 0 && (
                 <ul className="lista-resultados" role="listbox" id="lista-autocompletado">
                   {resultados.map((r, i) => (
@@ -189,6 +194,11 @@ export default function PaginaPublica() {
             <IconoBillete width={18} height={18} />
             {enviando ? "Enviando…" : "Ya pagué"}
           </button>
+          {!seleccionado && (
+            <p className="texto-suave" style={{ marginTop: "0.55rem", textAlign: "center", fontSize: "0.88rem" }}>
+              Selecciona tu nombre para continuar
+            </p>
+          )}
 
           {mensaje && (
             <p
