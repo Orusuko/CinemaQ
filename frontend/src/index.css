@@ -1193,6 +1193,96 @@ table.tabla-datos tbody tr:hover {
   max-width: 40rem;
 }
 
+/* Lista compacta Horario (enrolar / confirmar) */
+.horario-barra-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0.75rem 0 0.85rem;
+}
+
+.lista-horario {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--color-superficie);
+  border: 1px solid var(--color-borde);
+  border-radius: var(--radio);
+  overflow: hidden;
+}
+
+.lista-horario__fila {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  padding: 0.35rem 0.75rem;
+  border-bottom: 1px solid var(--color-borde);
+}
+
+.lista-horario__fila:last-child {
+  border-bottom: none;
+}
+
+.lista-horario__fila--sel {
+  background: #eef4ff;
+}
+
+.lista-horario__fila--ok {
+  background: #f0fdf4;
+}
+
+.lista-horario__label {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+  margin: 0;
+}
+
+.lista-horario__nombre {
+  font-weight: 500;
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lista-horario__fila--ok .lista-horario__nombre {
+  color: var(--color-texto-suave);
+}
+
+.lista-horario__badge {
+  margin-left: auto;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-exito);
+  flex-shrink: 0;
+}
+
+.lista-horario__quitar {
+  flex-shrink: 0;
+  padding: 0.28rem 0.65rem;
+  font-size: 0.78rem;
+  line-height: 1.2;
+  border-radius: var(--radio-sm);
+}
+
+.lista-horario__quitar:disabled {
+  opacity: 0.45;
+}
+
+.lista-horario .asistencia-confirmada {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
 .aviso-area-requerida {
   margin: 0 0 1rem;
   padding: 0.75rem 1rem;
@@ -1911,6 +2001,21 @@ table.tabla-datos tbody tr:hover {
   .barra-herramientas {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .horario-barra-acciones {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .horario-barra-acciones .boton {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .lista-horario__fila {
+    min-height: 3rem;
+    padding: 0.45rem 0.85rem;
   }
 
   .barra-herramientas .boton {
