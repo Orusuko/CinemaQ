@@ -19,6 +19,7 @@ import {
   IconoMoneda,
   IconoMenu,
   IconoCerrar,
+  IconoSubir,
 } from "../../components/Iconos";
 
 const ETIQUETAS_ROL: Record<string, string> = {
@@ -196,6 +197,11 @@ function ContenidoPanel() {
               {esAdminGeneral && (
                 <NavLink to="/panel/cuotas" className={claseNav} onClick={cerrarMenu}>
                   <IconoMoneda /> Cuotas
+                </NavLink>
+              )}
+              {esAdminGeneral && (
+                <NavLink to="/panel/importar-horario" className={claseNav} onClick={cerrarMenu}>
+                  <IconoSubir /> Importar horario
                 </NavLink>
               )}
               <NavLink to="/panel/cierres" className={claseNav} onClick={cerrarMenu}>

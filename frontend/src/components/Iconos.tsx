@@ -135,3 +135,17 @@ export const IconoCheck = (p: SVGProps<SVGSVGElement>) => (
     <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
   </Base>
 );
+
+/** Subir archivo (importar) */
+export const IconoSubir = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 7.5L12 3m0 0L7.5 7.5M12 3v13.5" />
+  </Base>
+);
+
+/** Deshacer (revertir última acción) */
+export const IconoDeshacer = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L4.5 10.5M4.5 10.5L9 6M4.5 10.5H15a5.25 5.25 0 010 10.5h-3" />
+  </Base>
+);
