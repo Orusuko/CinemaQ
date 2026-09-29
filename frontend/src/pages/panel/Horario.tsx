@@ -9,7 +9,9 @@ import { mensajeErrorConsulta } from "../../lib/consulta";
 import EstadoVacio from "../../components/EstadoVacio";
 import SkeletonTabla from "../../components/SkeletonTabla";
 import Tabs from "../../components/Tabs";
-import { IconoCheck, IconoLista, IconoUsuarios } from "../../components/Iconos";
+import Modal from "../../components/Modal";
+import ImportarHorario from "./ImportarHorario";
+import { IconoCheck, IconoLista, IconoSubir, IconoUsuarios } from "../../components/Iconos";
 import { abrirCineConEmpleados } from "../../lib/cineHorarios";
 import type { Empleado, HorarioDiario, RespuestaRpc } from "../../lib/tipos";
 
@@ -18,6 +20,7 @@ type PestanaHorario = "enrolar" | "confirmar";
 export default function Horario() {
   const { perfil } = useAuth();
   const esSupervision = perfil?.rol === "supervision";
+  const esAdminGeneral = perfil?.rol === "administrador_general";
   const { areaIdsFiltro, areas } = useArea();
   const { mostrarToast } = useToast();
   const [fecha, setFecha] = useState(fechaHoyInputCdmx());
@@ -30,6 +33,7 @@ export default function Horario() {
   const [procesandoId, setProcesandoId] = useState<string | null>(null);
   const [procesandoLote, setProcesandoLote] = useState(false);
   const [pestana, setPestana] = useState<PestanaHorario>("enrolar");
+  const [modalImportar, setModalImportar] = useState(false);
 
   const areaUnica = areaIdsFiltro && areaIdsFiltro.length === 1 ? areaIdsFiltro[0] : null;
 
@@ -284,6 +288,16 @@ export default function Horario() {
               onChange={(e) => setFecha(e.target.value)}
             />
           </div>
+          {esAdminGeneral && (
+            <button
+              type="button"
+              className="boton boton-secundario"
+              onClick={() => setModalImportar(true)}
+              title="Enrolar Comanderos y Corredores a partir del JSON del PDF semanal"
+            >
+              <IconoSubir width={16} height={16} /> Importar desde PDF
+            </button>
+          )}
           {!esSupervision && (
             <button
               type="button"
@@ -491,6 +505,12 @@ export default function Horario() {
           </>
         )}
       </Tabs>
+
+      {modalImportar && (
+        <Modal titulo="Importar desde PDF" extraAncho onCerrar={() => setModalImportar(false)}>
+          <ImportarHorario enModal />
+        </Modal>
+      )}
     </div>
   );
 }

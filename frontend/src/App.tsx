@@ -12,7 +12,6 @@ import Solicitudes from "./pages/panel/Solicitudes";
 import Usuarios from "./pages/panel/Usuarios";
 import Cuotas from "./pages/panel/Cuotas";
 import Cierres from "./pages/panel/Cierres";
-import ImportarHorario from "./pages/panel/ImportarHorario";
 import Auditoria from "./pages/panel/Auditoria";
 import Notificaciones from "./pages/panel/Notificaciones";
 import MiCuenta from "./pages/panel/MiCuenta";
@@ -77,14 +76,6 @@ export default function App() {
           }
         />
         <Route path="cierres" element={<Cierres />} />
-        <Route
-          path="importar-horario"
-          element={
-            <SoloRoles roles={["administrador_general"]}>
-              <ImportarHorario />
-            </SoloRoles>
-          }
-        />
         <Route
           path="auditoria"
           element={

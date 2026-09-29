@@ -74,7 +74,7 @@ function guardarLote(lote: LoteAplicado | null) {
   }
 }
 
-export default function ImportarHorario() {
+export default function ImportarHorario({ enModal = false }: { enModal?: boolean }) {
   const { perfil } = useAuth();
   const { mostrarToast } = useToast();
   const esAdminGeneral = perfil?.rol === "administrador_general";
@@ -351,16 +351,24 @@ export default function ImportarHorario() {
 
   return (
     <div>
-      <div className="barra-herramientas">
-        <div className="cabecera-pagina">
-          <h2>Importar horario</h2>
-          <p className="texto-suave cabecera-pagina__subtitulo">
-            Sube el JSON del PDF semanal (generado con parse_horario_v2.py) para ver qué obligaciones de cuota
-            deberían existir y crear solo las que falten. Lo que ya esté registrado — a mano o por una importación
-            previa — se detecta y se omite automáticamente.
-          </p>
+      {!enModal && (
+        <div className="barra-herramientas">
+          <div className="cabecera-pagina">
+            <h2>Importar horario</h2>
+            <p className="texto-suave cabecera-pagina__subtitulo">
+              Sube el JSON del PDF semanal (generado con parse_horario_v2.py) para ver qué obligaciones de cuota
+              deberían existir y crear solo las que falten. Lo que ya esté registrado — a mano o por una importación
+              previa — se detecta y se omite automáticamente.
+            </p>
+          </div>
         </div>
-      </div>
+      )}
+      {enModal && (
+        <p className="texto-suave">
+          Sube el JSON del PDF semanal (generado con parse_horario_v2.py). Lo que ya esté registrado se detecta y se
+          omite.
+        </p>
+      )}
 
       <div className="barra-herramientas">
         <div className="grupo-filtros" style={{ flexWrap: "wrap", alignItems: "flex-start" }}>
