@@ -44,6 +44,7 @@ interface LoteAplicado {
 interface FilaResultadoAplicacion {
   fila: FilaResuelta;
   resultado: "creado" | "error";
+  error?: string;
 }
 
 interface ResultadoAplicacion {
@@ -202,6 +203,14 @@ export default function ImportarHorario({ enModal = false }: { enModal?: boolean
     }
   }
 
+  const erroresAgrupados = (() => {
+    const conteo = new Map<string, number>();
+    for (const r of ultimoResultado?.filas ?? []) {
+      if (r.error) conteo.set(r.error, (conteo.get(r.error) ?? 0) + 1);
+    }
+    return Array.from(conteo.entries());
+  })();
+
   const totales = filas ? calcularTotales(filas) : null;
 
   const filasCrear = (filas ?? []).map((f, i) => ({ f, i })).filter(({ f }) => f.accion === "crear");
@@ -239,7 +248,7 @@ export default function ImportarHorario({ enModal = false }: { enModal?: boolean
     for (const f of filasAAplicar) {
       if (!f.empleado_id || !f.area_id) {
         fallidas += 1;
-        resultadoDetalle.push({ fila: f, resultado: "error" });
+        resultadoDetalle.push({ fila: f, resultado: "error", error: "sin empleado o área resueltos" });
         conteoErrores["sin_id"] = (conteoErrores["sin_id"] ?? 0) + 1;
         continue;
       }
@@ -262,8 +271,8 @@ export default function ImportarHorario({ enModal = false }: { enModal?: boolean
         resultadoDetalle.push({ fila: f, resultado: "creado" });
       } catch (e) {
         fallidas += 1;
-        resultadoDetalle.push({ fila: f, resultado: "error" });
         const mensaje = e instanceof Error ? e.message : "desconocido";
+        resultadoDetalle.push({ fila: f, resultado: "error", error: `${paso}: ${mensaje}` });
         const clave = `${paso}|${mensaje}`;
         conteoErrores[clave] = (conteoErrores[clave] ?? 0) + 1;
         if (!erroresVistos.has(clave) && erroresVistos.size < 4) {
@@ -330,9 +339,9 @@ export default function ImportarHorario({ enModal = false }: { enModal?: boolean
 
   function exportarResultadoCsv() {
     if (!ultimoResultado || ultimoResultado.filas.length === 0) return;
-    const encabezados = ["PS", "Empleado", "Área", "Fecha", "Monto esperado", "Resultado", "Creó horario"];
+    const encabezados = ["PS", "Empleado", "Área", "Fecha", "Monto esperado", "Resultado", "Creó horario", "Detalle del error"];
     const lineas = [filaCsv(encabezados)];
-    for (const { fila, resultado } of ultimoResultado.filas) {
+    for (const { fila, resultado, error } of ultimoResultado.filas) {
       lineas.push(
         filaCsv([
           fila.ps,
@@ -342,6 +351,7 @@ export default function ImportarHorario({ enModal = false }: { enModal?: boolean
           (fila.monto_esperado ?? 0).toFixed(2),
           resultado === "creado" ? "Creado" : "Error",
           fila.ya_tiene_horario ? "No (ya existía)" : "Sí",
+          error ?? "",
         ]),
       );
     }
@@ -529,6 +539,15 @@ export default function ImportarHorario({ enModal = false }: { enModal?: boolean
               ? `Última aplicación: ${ultimoResultado.filas.filter((r) => r.resultado === "creado").length} creada(s), ${ultimoResultado.filas.filter((r) => r.resultado === "error").length} con error — ${formatoFechaHora(ultimoResultado.aplicado_en)}.`
               : `Última importación aplicada: ${loteAplicado?.filas.length} fila(s), ${formatoFecha(loteAplicado?.aplicado_en.slice(0, 10))}.`}
           </p>
+          {ultimoResultado && erroresAgrupados.length > 0 && (
+            <ul className="texto-suave" style={{ margin: "8px 0 0", paddingLeft: 20, flexBasis: "100%" }}>
+              {erroresAgrupados.map(([mensaje, cantidad]) => (
+                <li key={mensaje}>
+                  ⚠ {cantidad} fila(s): {mensaje}
+                </li>
+              ))}
+            </ul>
+          )}
           <div className="grupo-filtros" style={{ marginBottom: 0 }}>
             {ultimoResultado && (
               <button type="button" className="boton boton-secundario" onClick={exportarResultadoCsv}>
