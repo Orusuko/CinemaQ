@@ -20,6 +20,7 @@ import {
   type FilaContratoCrudo,
   type FilaResuelta,
 } from "../../lib/importacionHorario";
+import { leerHorarioPdf, type LecturaHorarioPdf } from "../../lib/horarioPdf";
 import type { Area, AsistenciaDiaria, Empleado, HistorialCuota, HorarioDiario, PagoCuota, RespuestaRpc } from "../../lib/tipos";
 
 const CLAVE_LOTE = "cinemaquote_importacion_ultimo_lote_v1";
@@ -80,6 +81,9 @@ export default function ImportarHorario({ enModal = false }: { enModal?: boolean
   const esAdminGeneral = perfil?.rol === "administrador_general";
 
   const refArchivo = useRef<HTMLInputElement>(null);
+  const [archivosPdf, setArchivosPdf] = useState<File[]>([]);
+  const [lecturaPdf, setLecturaPdf] = useState<LecturaHorarioPdf | null>(null);
+  const [verLectura, setVerLectura] = useState(false);
   const [textoJson, setTextoJson] = useState("");
   const [analizando, setAnalizando] = useState(false);
   const [filas, setFilas] = useState<FilaResuelta[] | null>(null);
@@ -97,13 +101,34 @@ export default function ImportarHorario({ enModal = false }: { enModal?: boolean
     guardarLote(loteAplicado);
   }, [loteAplicado]);
 
-  function leerArchivo(archivo: File) {
+  function leerArchivoJson(archivo: File) {
     const lector = new FileReader();
     lector.onload = () => setTextoJson(String(lector.result ?? ""));
     lector.readAsText(archivo, "utf-8");
   }
 
+  /** Lee los PDFs (o, como respaldo, el JSON pegado) y lanza la comparación contra CinemaQ. */
   async function analizar() {
+    if (archivosPdf.length > 0) {
+      setAnalizando(true);
+      let lectura: LecturaHorarioPdf;
+      try {
+        lectura = await leerHorarioPdf(archivosPdf);
+      } catch (e) {
+        setAnalizando(false);
+        mostrarToast(e instanceof Error ? `No se pudo leer el PDF: ${e.message}` : "No se pudo leer el PDF.", "error");
+        return;
+      }
+      setLecturaPdf(lectura);
+      if (lectura.filas.length === 0) {
+        setAnalizando(false);
+        mostrarToast("No se encontraron filas de horario en el PDF. Revisa los avisos.", "error");
+        return;
+      }
+      await analizarFilas(lectura.filas);
+      return;
+    }
+
     let crudo: FilaContratoCrudo[];
     try {
       const parseado = JSON.parse(textoJson);
@@ -117,7 +142,13 @@ export default function ImportarHorario({ enModal = false }: { enModal?: boolean
       mostrarToast("El archivo no tiene filas.", "error");
       return;
     }
+    setLecturaPdf(null);
+    setAnalizando(true);
+    await analizarFilas(crudo);
+  }
 
+  /** Resuelve las filas crudas contra el estado en vivo de Supabase. Asume `analizando` ya activo. */
+  async function analizarFilas(crudo: FilaContratoCrudo[]) {
     setAnalizando(true);
     try {
       const fechas = Array.from(new Set(crudo.map((f) => f.fecha))).sort();
@@ -270,13 +301,8 @@ export default function ImportarHorario({ enModal = false }: { enModal?: boolean
       mostrarToast(`${exitosas.length} creadas; ${fallidas} con error (revisa e intenta de nuevo).`, "info");
     }
 
-    if (filasCrudas) {
-      // Re-analiza contra el estado ya actualizado para que las filas creadas pasen a "ya registrado".
-      const textoActual = textoJson;
-      setTextoJson(JSON.stringify(filasCrudas));
-      await analizar();
-      setTextoJson(textoActual);
-    }
+    // Re-analiza contra el estado ya actualizado para que las filas creadas pasen a "ya registrado".
+    if (filasCrudas) await analizarFilas(filasCrudas);
   }
 
   function exportarResultadoCsv() {
@@ -334,12 +360,7 @@ export default function ImportarHorario({ enModal = false }: { enModal?: boolean
       mostrarToast(`Se deshicieron ${deshechas}; ${pendientes.length} no se pudieron revertir. Reintenta.`, "info");
     }
 
-    if (filasCrudas) {
-      const textoActual = textoJson;
-      setTextoJson(JSON.stringify(filasCrudas));
-      await analizar();
-      setTextoJson(textoActual);
-    }
+    if (filasCrudas) await analizarFilas(filasCrudas);
   }
 
   const pestanas = [
@@ -356,32 +377,62 @@ export default function ImportarHorario({ enModal = false }: { enModal?: boolean
           <div className="cabecera-pagina">
             <h2>Importar horario</h2>
             <p className="texto-suave cabecera-pagina__subtitulo">
-              Sube el JSON del PDF semanal (generado con parse_horario_v2.py) para ver qué obligaciones de cuota
-              deberían existir y crear solo las que falten. Lo que ya esté registrado — a mano o por una importación
-              previa — se detecta y se omite automáticamente.
+              Sube el PDF del horario semanal para ver qué obligaciones de cuota deberían existir (Comanderos y
+              Corredores con entrada a las 11:00 o después) y crear solo las que falten. Lo que ya esté registrado — a
+              mano o por una importación previa — se detecta y se omite automáticamente.
             </p>
           </div>
         </div>
       )}
       {enModal && (
         <p className="texto-suave">
-          Sube el JSON del PDF semanal (generado con parse_horario_v2.py). Lo que ya esté registrado se detecta y se
-          omite.
+          Sube el PDF del horario semanal. Se toman solo Comanderos y Corredores con entrada a las 11:00 o después, y lo
+          que ya esté registrado se detecta y se omite.
         </p>
       )}
 
       <div className="barra-herramientas">
         <div className="grupo-filtros" style={{ flexWrap: "wrap", alignItems: "flex-start" }}>
+          <div className="campo" style={{ marginBottom: 0, minWidth: 280, flex: 1 }}>
+            <label htmlFor="importar-horario-pdf">PDF(s) del horario semanal</label>
+            <input
+              id="importar-horario-pdf"
+              ref={refArchivo}
+              type="file"
+              accept="application/pdf,.pdf"
+              multiple
+              onChange={(e) => {
+                setArchivosPdf(Array.from(e.target.files ?? []));
+                setLecturaPdf(null);
+              }}
+            />
+            <span className="texto-suave">Puedes elegir varias semanas a la vez.</span>
+          </div>
+        </div>
+        <button
+          type="button"
+          className="boton boton-primario"
+          disabled={(archivosPdf.length === 0 && !textoJson.trim()) || analizando}
+          onClick={analizar}
+        >
+          <IconoSubir width={16} height={16} /> {analizando ? "Analizando…" : "Analizar"}
+        </button>
+      </div>
+
+      <details style={{ marginBottom: 12 }}>
+        <summary className="texto-suave" style={{ cursor: "pointer" }}>
+          Avanzado: usar un JSON ya generado
+        </summary>
+        <div className="grupo-filtros" style={{ flexWrap: "wrap", alignItems: "flex-start", marginTop: 8 }}>
           <div className="campo" style={{ marginBottom: 0, minWidth: 280 }}>
-            <label htmlFor="importar-horario-archivo">Archivo JSON del contrato crudo</label>
+            <label htmlFor="importar-horario-archivo">Archivo JSON del contrato</label>
             <input
               id="importar-horario-archivo"
-              ref={refArchivo}
               type="file"
               accept="application/json,.json"
               onChange={(e) => {
                 const archivo = e.target.files?.[0];
-                if (archivo) leerArchivo(archivo);
+                if (archivo) leerArchivoJson(archivo);
               }}
             />
           </div>
@@ -389,22 +440,64 @@ export default function ImportarHorario({ enModal = false }: { enModal?: boolean
             <label htmlFor="importar-horario-texto">O pega aquí el JSON</label>
             <textarea
               id="importar-horario-texto"
-              rows={4}
+              rows={3}
               value={textoJson}
               onChange={(e) => setTextoJson(e.target.value)}
               placeholder='[{"ps":"012345","nombre_pdf":"...","fecha":"2026-09-01", ...}]'
             />
+            <span className="texto-suave">Solo se usa si no hay ningún PDF seleccionado.</span>
           </div>
         </div>
-        <button
-          type="button"
-          className="boton boton-primario"
-          disabled={!textoJson.trim() || analizando}
-          onClick={analizar}
-        >
-          <IconoSubir width={16} height={16} /> {analizando ? "Analizando…" : "Analizar"}
-        </button>
-      </div>
+      </details>
+
+      {lecturaPdf && (
+        <div role="status" style={{ marginBottom: 12 }}>
+          {lecturaPdf.archivos.map((a) => (
+            <p key={a.nombre} className="texto-suave" style={{ margin: "0 0 4px" }}>
+              <strong>{a.nombre}</strong>:{" "}
+              {a.semana !== null ? `Semana ${a.semana}` : "Semana sin identificar"}
+              {a.desde && a.hasta ? ` · ${formatoFecha(a.desde)} – ${formatoFecha(a.hasta)}` : ""} · {a.empleados}{" "}
+              empleados{a.generadoEn ? ` · generado ${a.generadoEn}` : ""}
+            </p>
+          ))}
+          {lecturaPdf.avisos.length > 0 && (
+            <ul className="texto-suave" style={{ margin: "8px 0 0", paddingLeft: 20 }}>
+              {lecturaPdf.avisos.map((aviso, i) => (
+                <li key={i}>⚠ {aviso}</li>
+              ))}
+            </ul>
+          )}
+          <details onToggle={(e) => setVerLectura((e.currentTarget as HTMLDetailsElement).open)} style={{ marginTop: 8 }}>
+            <summary className="texto-suave" style={{ cursor: "pointer" }}>
+              Ver lectura del PDF ({lecturaPdf.diagnostico.length} celdas)
+            </summary>
+            {verLectura && (
+              <EnvoltorioTabla>
+                <table className="tabla-datos">
+                  <thead>
+                    <tr>
+                      <th>PS</th>
+                      <th>Nombre</th>
+                      <th>Fecha</th>
+                      <th>Celda</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lecturaPdf.diagnostico.map((d, i) => (
+                      <tr key={i}>
+                        <td className="num-tabular">{d.ps}</td>
+                        <td>{d.nombre_pdf}</td>
+                        <td className="num-tabular">{d.fecha}</td>
+                        <td>{d.raw_cell ? d.raw_cell.replace(/\n/g, " · ") : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </EnvoltorioTabla>
+            )}
+          </details>
+        </div>
+      )}
 
       {(ultimoResultado || (loteAplicado && loteAplicado.filas.length > 0)) && (
         <div className="barra-herramientas" role="status">
@@ -439,7 +532,7 @@ export default function ImportarHorario({ enModal = false }: { enModal?: boolean
       ) : !filas || !totales ? (
         <EstadoVacio
           icono={<IconoArchivo width={32} height={32} />}
-          mensaje="Sube o pega el JSON generado por parse_horario_v2.py y presiona Analizar."
+          mensaje="Selecciona el PDF del horario semanal y presiona Analizar."
         />
       ) : (
         <>
