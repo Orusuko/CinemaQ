@@ -233,17 +233,23 @@ export default function ImportarHorario({ enModal = false }: { enModal?: boolean
     const exitosas: FilaLote[] = [];
     const resultadoDetalle: FilaResultadoAplicacion[] = [];
     let fallidas = 0;
+    const conteoErrores: Record<string, number> = {};
+    const erroresVistos = new Set<string>();
 
     for (const f of filasAAplicar) {
       if (!f.empleado_id || !f.area_id) {
         fallidas += 1;
         resultadoDetalle.push({ fila: f, resultado: "error" });
+        conteoErrores["sin_id"] = (conteoErrores["sin_id"] ?? 0) + 1;
         continue;
       }
+      let paso: "horario" | "asistencia" = "horario";
       try {
         if (!f.ya_tiene_horario) {
+          paso = "horario";
           await llamarRpc("registrar_horario", { p_empleado_id: f.empleado_id, p_fecha: f.fecha });
         }
+        paso = "asistencia";
         await llamarRpc("registrar_asistencia", { p_empleado_id: f.empleado_id, p_fecha: f.fecha });
         exitosas.push({
           empleado_id: f.empleado_id,
@@ -254,11 +260,24 @@ export default function ImportarHorario({ enModal = false }: { enModal?: boolean
           creo_horario: !f.ya_tiene_horario,
         });
         resultadoDetalle.push({ fila: f, resultado: "creado" });
-      } catch {
+      } catch (e) {
         fallidas += 1;
         resultadoDetalle.push({ fila: f, resultado: "error" });
+        const mensaje = e instanceof Error ? e.message : "desconocido";
+        const clave = `${paso}|${mensaje}`;
+        conteoErrores[clave] = (conteoErrores[clave] ?? 0) + 1;
+        if (!erroresVistos.has(clave) && erroresVistos.size < 4) {
+          erroresVistos.add(clave);
+          // #region agent log
+          fetch("http://127.0.0.1:7569/ingest/b171d2d0-c768-48c6-b64a-69f48f7d8e0e", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "df313b" }, body: JSON.stringify({ sessionId: "df313b", runId: "pre-fix", hypothesisId: "A-D", location: "ImportarHorario.tsx:aplicarSeleccionadas", message: "RPC de importacion fallo", data: { paso, mensaje, fecha: f.fecha, ya_tiene_horario: f.ya_tiene_horario, area: f.area_cinema }, timestamp: Date.now() }) }).catch(() => {});
+          // #endregion
+        }
       }
     }
+
+    // #region agent log
+    fetch("http://127.0.0.1:7569/ingest/b171d2d0-c768-48c6-b64a-69f48f7d8e0e", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "df313b" }, body: JSON.stringify({ sessionId: "df313b", runId: "pre-fix", hypothesisId: "resumen", location: "ImportarHorario.tsx:aplicarSeleccionadas", message: "resumen de aplicacion", data: { intentadas: filasAAplicar.length, exitosas: exitosas.length, fallidas, conteoErrores }, timestamp: Date.now() }) }).catch(() => {});
+    // #endregion
 
     setUltimoResultado({ aplicado_en: new Date().toISOString(), filas: resultadoDetalle });
 
@@ -298,7 +317,11 @@ export default function ImportarHorario({ enModal = false }: { enModal?: boolean
     if (fallidas === 0) {
       mostrarToast(`${exitosas.length} obligación(es) de cuota creada(s).`, "exito");
     } else {
-      mostrarToast(`${exitosas.length} creadas; ${fallidas} con error (revisa e intenta de nuevo).`, "info");
+      const primerError = Object.keys(conteoErrores)[0];
+      mostrarToast(
+        `${exitosas.length} creadas; ${fallidas} con error.${primerError ? ` ${primerError}` : ""}`,
+        "info",
+      );
     }
 
     // Re-analiza contra el estado ya actualizado para que las filas creadas pasen a "ya registrado".
