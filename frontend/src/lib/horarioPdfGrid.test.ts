@@ -77,6 +77,24 @@ it("palabras partidas por kerning se pegan sin espacio", () => {
   expect(filas[0].raw_cell).toBe("04:00 PM - 10:00 PM\nCOMANDEROS");
 });
 
+it("PS fusionado con la primera linea del nombre en un solo fragmento", () => {
+  const items = [
+    ...encabezado,
+    t("100001 PRUEBA UNO", 42.5, 667.7, 187.9),
+    t("SEGUNDO NOMBRE", 110.7, 653.4, 80),
+    t("04:00 PM - 10:00 PM ", 250.3, 669.1, 100),
+    t("COMANDEROS", 263.2, 657.2, 50),
+  ];
+  const { filas, empleados } = buildGridFromItems(items);
+  expect(empleados).toBe(1);
+  expect(filas[0]).toEqual({
+    ps: "100001",
+    nombre_pdf: "PRUEBA UNO SEGUNDO NOMBRE",
+    fecha: "2026-09-10",
+    raw_cell: "04:00 PM - 10:00 PM\nCOMANDEROS",
+  });
+});
+
 it("pagina 2 solo con encabezado repetido y avisos de PS repetido", () => {
   const pag2 = (str: string, x: number, y: number, w = str.length * 5) => t(str, x, y, w, 2);
   const items = [

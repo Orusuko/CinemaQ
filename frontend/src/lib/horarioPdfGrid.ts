@@ -142,12 +142,22 @@ function procesarPagina(
 
   // Filas: un PS de 6 dígitos en la zona izquierda, antes de la columna "Nombre".
   const nombreEnc = util.find((it) => Math.abs(it.y - yEnc) <= TOL_LINEA && it.str.trim().toLowerCase() === "nombre");
-  const cuerpo = util.filter((it) => it.y < yEnc - TOL_LINEA);
+  const maxXPs = nombreEnc ? nombreEnc.x - 30 : limiteIzq; // el PS empieza en el borde izquierdo
+  // pdf.js a veces fusiona el PS con la 1a línea del nombre ("362028 DIAZ BRISEÑO"): se separan.
+  const cuerpo: ItemTexto[] = [];
+  for (const it of util) {
+    if (it.y >= yEnc - TOL_LINEA) continue;
+    const m = it.x < maxXPs ? /^(\d{6})\s+(\S.*)$/.exec(it.str.trim()) : null;
+    if (m) {
+      const anchoResto = it.w * (m[2].length / it.str.trim().length);
+      cuerpo.push({ ...it, str: m[1], w: it.w - anchoResto });
+      cuerpo.push({ ...it, str: m[2], x: it.x + it.w - anchoResto, w: anchoResto });
+    } else {
+      cuerpo.push(it);
+    }
+  }
   const psItems = cuerpo
-    .filter((it) => {
-      const centro = it.x + it.w / 2;
-      return centro < limiteIzq && (!nombreEnc || centro < nombreEnc.x) && normalizePs(it.str) !== null;
-    })
+    .filter((it) => it.x < maxXPs && normalizePs(it.str) !== null)
     .sort((a, b) => b.y - a.y);
   if (psItems.length === 0) {
     avisos.push(`Página ${pagina}: tiene encabezado pero ninguna fila de empleado.`);
