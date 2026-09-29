@@ -20,7 +20,6 @@ type PestanaHorario = "enrolar" | "confirmar";
 export default function Horario() {
   const { perfil } = useAuth();
   const esSupervision = perfil?.rol === "supervision";
-  const esAdminGeneral = perfil?.rol === "administrador_general";
   const { areaIdsFiltro, areas } = useArea();
   const { mostrarToast } = useToast();
   const [fecha, setFecha] = useState(fechaHoyInputCdmx());
@@ -288,16 +287,14 @@ export default function Horario() {
               onChange={(e) => setFecha(e.target.value)}
             />
           </div>
-          {esAdminGeneral && (
-            <button
-              type="button"
-              className="boton boton-secundario"
-              onClick={() => setModalImportar(true)}
-              title="Enrolar Comanderos y Corredores a partir del JSON del PDF semanal"
-            >
-              <IconoSubir width={16} height={16} /> Importar desde PDF
-            </button>
-          )}
+          <button
+            type="button"
+            className="boton boton-secundario"
+            onClick={() => setModalImportar(true)}
+            title="Enrolar Comanderos y Corredores a partir del PDF del horario semanal"
+          >
+            <IconoSubir width={16} height={16} /> Importar desde PDF
+          </button>
           {!esSupervision && (
             <button
               type="button"

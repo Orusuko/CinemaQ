@@ -207,3 +207,29 @@ export interface RespuestaRpc {
   mensaje: string;
   [clave: string]: unknown;
 }
+
+/** Cabecera de un lote de importación automática desde PDF. */
+export interface ImportacionHorario {
+  id: string;
+  aplicado_en: string;
+  aplicado_por: string | null;
+  filas: number;
+  perfiles?: {
+    nombre_completo: string;
+    nombre_usuario: string;
+  } | null;
+}
+
+/** Detalle de una fila aplicada en un lote de importación. */
+export interface ImportacionHorarioDetalle {
+  id: string;
+  importacion_id: string;
+  empleado_id: string | null;
+  fecha: string | null;
+  area_id: string | null;
+  ps: string | null;
+  nombre: string | null;
+  monto: number | null;
+  creo_horario: boolean | null;
+  asistencia_id: string | null;
+}

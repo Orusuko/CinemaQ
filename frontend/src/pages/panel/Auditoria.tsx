@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 import { useArea } from "../../context/AreaContext";
-import { formatoFechaHora, nombreCompletoEmpleado, formatoMoneda } from "../../lib/formato";
+import { formatoFecha, formatoFechaHora, nombreCompletoEmpleado, formatoMoneda } from "../../lib/formato";
 import { descargarCsv, filaCsv, nombreArchivoCsv } from "../../lib/csv";
 import { mensajeErrorConsulta } from "../../lib/consulta";
 import EnvoltorioTabla from "../../components/EnvoltorioTabla";
@@ -10,10 +10,10 @@ import Modal from "../../components/Modal";
 import ChipArea from "../../components/ChipArea";
 import EstadoVacio from "../../components/EstadoVacio";
 import SkeletonTabla from "../../components/SkeletonTabla";
-import { IconoEscudo, IconoLista } from "../../components/Iconos";
+import { IconoEscudo, IconoLista, IconoSubir } from "../../components/Iconos";
 import { useToast } from "../../context/ToastContext";
 import { fechaHoyInputCdmx, ordenarRangoFechas } from "../../lib/formato";
-import type { AsistenciaDiaria, PagoCuota } from "../../lib/tipos";
+import type { AsistenciaDiaria, ImportacionHorario, ImportacionHorarioDetalle, PagoCuota } from "../../lib/tipos";
 import {
   type LogAuditoria,
   type PerfilAuditoria,
@@ -33,8 +33,12 @@ export default function Auditoria() {
   const [perfilesPorId, setPerfilesPorId] = useState<Map<string, PerfilAuditoria>>(new Map());
   const [eliminados, setEliminados] = useState<AsistenciaDiaria[]>([]);
   const [revertidos, setRevertidos] = useState<PagoCuota[]>([]);
+  const [importaciones, setImportaciones] = useState<ImportacionHorario[]>([]);
   const [cargando, setCargando] = useState(true);
   const [detalleAbierto, setDetalleAbierto] = useState<LogAuditoria | null>(null);
+  const [importacionAbierta, setImportacionAbierta] = useState<ImportacionHorario | null>(null);
+  const [detalleImportacion, setDetalleImportacion] = useState<ImportacionHorarioDetalle[]>([]);
+  const [cargandoDetalleImportacion, setCargandoDetalleImportacion] = useState(false);
   const [desde, setDesde] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - 30);
@@ -42,7 +46,8 @@ export default function Auditoria() {
   });
   const [hasta, setHasta] = useState(fechaHoyInputCdmx());
 
-  function nombreArea(id: string) {
+  function nombreArea(id: string | null | undefined) {
+    if (!id) return "—";
     return areas.find((a) => a.id === id)?.nombre ?? "—";
   }
 
@@ -101,12 +106,45 @@ export default function Auditoria() {
       const { data: datosRevertidos, error: errorRevertidos } = await consultaRevertidos;
       if (errorRevertidos) throw errorRevertidos;
       setRevertidos((datosRevertidos as PagoCuota[]) ?? []);
+
+      const { data: datosImportaciones, error: errorImportaciones } = await supabase
+        .from("importaciones_horario")
+        .select("id, aplicado_en, aplicado_por, filas, perfiles(nombre_completo, nombre_usuario)")
+        .gte("aplicado_en", `${rango.desde}T00:00:00`)
+        .lte("aplicado_en", `${rango.hasta}T23:59:59`)
+        .order("aplicado_en", { ascending: false })
+        .limit(200);
+      if (errorImportaciones) throw errorImportaciones;
+      type FilaImportacionCruda = {
+        id: string;
+        aplicado_en: string;
+        aplicado_por: string | null;
+        filas: number;
+        perfiles:
+          | { nombre_completo: string; nombre_usuario: string }
+          | { nombre_completo: string; nombre_usuario: string }[]
+          | null;
+      };
+      const normalizadas: ImportacionHorario[] = ((datosImportaciones as FilaImportacionCruda[] | null) ?? []).map(
+        (fila) => {
+          const perfilJoin = Array.isArray(fila.perfiles) ? (fila.perfiles[0] ?? null) : fila.perfiles;
+          return {
+            id: fila.id,
+            aplicado_en: fila.aplicado_en,
+            aplicado_por: fila.aplicado_por,
+            filas: fila.filas,
+            perfiles: perfilJoin,
+          };
+        },
+      );
+      setImportaciones(normalizadas);
     } catch (e) {
       const msg = e instanceof Error ? e.message : mensajeErrorConsulta(null, "No se pudo cargar la auditoría.");
       mostrarToast(msg, "error");
       setLogs([]);
       setEliminados([]);
       setRevertidos([]);
+      setImportaciones([]);
     } finally {
       setCargando(false);
     }
@@ -116,6 +154,24 @@ export default function Auditoria() {
     cargar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [desde, hasta, areaIdsFiltro]);
+
+  async function abrirDetalleImportacion(imp: ImportacionHorario) {
+    setImportacionAbierta(imp);
+    setCargandoDetalleImportacion(true);
+    setDetalleImportacion([]);
+    const { data, error } = await supabase
+      .from("importaciones_horario_detalle")
+      .select("*")
+      .eq("importacion_id", imp.id)
+      .order("fecha", { ascending: true });
+    if (error) {
+      mostrarToast(mensajeErrorConsulta(error, "No se pudo cargar el detalle de la importación."), "error");
+      setCargandoDetalleImportacion(false);
+      return;
+    }
+    setDetalleImportacion((data as ImportacionHorarioDetalle[]) ?? []);
+    setCargandoDetalleImportacion(false);
+  }
 
   /* --- Filtrar logs por area_id del detalle JSON --- */
   const logsFiltrados = useMemo(() => {
@@ -132,11 +188,21 @@ export default function Auditoria() {
   const pestanas = useMemo(
     () => [
       { id: "logs", etiqueta: "Registro general", contador: logsFiltrados.length },
+      { id: "importaciones", etiqueta: "Importaciones PDF", contador: importaciones.length },
       { id: "eliminados", etiqueta: "Asistencias eliminadas", contador: eliminados.length },
       { id: "revertidos", etiqueta: "Pagos revertidos", contador: revertidos.length },
     ],
-    [logsFiltrados.length, eliminados.length, revertidos.length],
+    [logsFiltrados.length, importaciones.length, eliminados.length, revertidos.length],
   );
+
+  function nombreQuienAplico(imp: ImportacionHorario) {
+    if (imp.perfiles?.nombre_completo) return imp.perfiles.nombre_completo;
+    if (imp.aplicado_por) {
+      const p = perfilesPorId.get(imp.aplicado_por);
+      if (p?.nombre_completo) return p.nombre_completo;
+    }
+    return "—";
+  }
 
   /* --- Export CSV del registro general --- */
   function exportarRegistroGeneral() {
@@ -190,6 +256,16 @@ export default function Auditoria() {
     }
     const nombreAreaArchivo = areaIdsFiltro && areaIdsFiltro.length === 1 ? nombreArea(areaIdsFiltro[0]) : "ambas";
     const ok = descargarCsv(nombreArchivoCsv("auditoria_revertidos", nombreAreaArchivo, desde, hasta), lineas);
+    mostrarToast(ok ? "CSV descargado." : "No se pudo descargar el CSV.", ok ? "exito" : "error");
+  }
+
+  function exportarImportaciones() {
+    const lineas = [filaCsv(["Aplicado el", "Aplicado por", "Filas"])];
+    for (const imp of importaciones) {
+      lineas.push(filaCsv([formatoFechaHora(imp.aplicado_en), nombreQuienAplico(imp), String(imp.filas)]));
+    }
+    const nombreAreaArchivo = areaIdsFiltro && areaIdsFiltro.length === 1 ? nombreArea(areaIdsFiltro[0]) : "ambas";
+    const ok = descargarCsv(nombreArchivoCsv("auditoria_importaciones_pdf", nombreAreaArchivo, desde, hasta), lineas);
     mostrarToast(ok ? "CSV descargado." : "No se pudo descargar el CSV.", ok ? "exito" : "error");
   }
 
@@ -284,6 +360,60 @@ export default function Auditoria() {
                 </tbody>
               </table>
             </EnvoltorioTabla>
+            )}
+          </>
+        )}
+
+        {pestana === "importaciones" && (
+          <>
+            <div className="fila-acciones" style={{ justifyContent: "flex-end", marginBottom: "0.6rem" }}>
+              <button
+                type="button"
+                className="boton boton-secundario"
+                onClick={exportarImportaciones}
+                disabled={cargando || importaciones.length === 0}
+              >
+                Exportar CSV
+              </button>
+            </div>
+            {cargando ? (
+              <SkeletonTabla filas={6} />
+            ) : importaciones.length === 0 ? (
+              <EstadoVacio
+                icono={<IconoSubir width={32} height={32} />}
+                mensaje="Sin importaciones de horario en este rango."
+              />
+            ) : (
+              <EnvoltorioTabla>
+                <table className="tabla-datos">
+                  <thead>
+                    <tr>
+                      <th>Aplicado el</th>
+                      <th>Aplicado por</th>
+                      <th>Filas</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {importaciones.map((imp) => (
+                      <tr key={imp.id}>
+                        <td className="num-tabular">{formatoFechaHora(imp.aplicado_en)}</td>
+                        <td>{nombreQuienAplico(imp)}</td>
+                        <td className="num-tabular">{imp.filas}</td>
+                        <td>
+                          <button
+                            type="button"
+                            className="boton boton-texto boton-chico"
+                            onClick={() => abrirDetalleImportacion(imp)}
+                          >
+                            Ver detalle
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </EnvoltorioTabla>
             )}
           </>
         )}
@@ -383,6 +513,57 @@ export default function Auditoria() {
           </p>
           <p className="resumen-auditoria">{resumirLogAuditoria(detalleAbierto, areas)}</p>
           <pre className="detalle-tecnico-json">{detalleTecnicoFormateado(detalleAbierto.detalle)}</pre>
+        </Modal>
+      )}
+
+      {importacionAbierta && (
+        <Modal
+          titulo="Detalle de importación PDF"
+          onCerrar={() => {
+            setImportacionAbierta(null);
+            setDetalleImportacion([]);
+          }}
+          extraAncho
+        >
+          <p className="texto-suave" style={{ marginTop: 0 }}>
+            {formatoFechaHora(importacionAbierta.aplicado_en)} · {nombreQuienAplico(importacionAbierta)} ·{" "}
+            {importacionAbierta.filas} fila(s)
+          </p>
+          {cargandoDetalleImportacion ? (
+            <SkeletonTabla filas={4} />
+          ) : detalleImportacion.length === 0 ? (
+            <EstadoVacio
+              icono={<IconoSubir width={32} height={32} />}
+              mensaje="Esta importación no tiene filas de detalle guardadas."
+            />
+          ) : (
+            <EnvoltorioTabla>
+              <table className="tabla-datos">
+                <thead>
+                  <tr>
+                    <th>PS</th>
+                    <th>Nombre</th>
+                    <th>Área</th>
+                    <th>Fecha</th>
+                    <th>Monto</th>
+                    <th>Creó horario</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detalleImportacion.map((d) => (
+                    <tr key={d.id}>
+                      <td className="num-tabular">{d.ps ?? "—"}</td>
+                      <td>{d.nombre ?? "—"}</td>
+                      <td><ChipArea nombre={nombreArea(d.area_id)} /></td>
+                      <td className="num-tabular">{d.fecha ? formatoFecha(d.fecha) : "—"}</td>
+                      <td className="num-tabular">{d.monto != null ? formatoMoneda(d.monto) : "—"}</td>
+                      <td>{d.creo_horario ? "Sí" : "No"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </EnvoltorioTabla>
+          )}
         </Modal>
       )}
     </div>

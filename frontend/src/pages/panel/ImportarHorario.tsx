@@ -23,22 +23,21 @@ import {
 import { leerHorarioPdf, type LecturaHorarioPdf } from "../../lib/horarioPdf";
 import type { Area, AsistenciaDiaria, Empleado, HistorialCuota, HorarioDiario, PagoCuota, RespuestaRpc } from "../../lib/tipos";
 
-const CLAVE_LOTE = "cinemaquote_importacion_ultimo_lote_v1";
+/** Solo recuerda el id del último lote de este navegador; la fuente de verdad es la BD. */
+const CLAVE_LOTE = "cinemaquote_importacion_ultimo_lote_v2";
 
-interface FilaLote {
-  empleado_id: string;
-  fecha: string;
-  area_id: string;
-  nombre_empleado_bd: string | null;
-  asistencia_id: string | null;
-  creo_horario: boolean;
+interface LoteLocal {
+  importacion_id: string;
+  aplicado_en: string;
+  filas: number;
 }
 
-interface LoteAplicado {
-  id: string;
-  aplicado_en: string;
-  aplicado_por: string;
-  filas: FilaLote[];
+interface DetalleLote {
+  empleado_id: string | null;
+  fecha: string | null;
+  area_id: string | null;
+  asistencia_id: string | null;
+  creo_horario: boolean | null;
 }
 
 interface FilaResultadoAplicacion {
@@ -52,28 +51,40 @@ interface ResultadoAplicacion {
   filas: FilaResultadoAplicacion[];
 }
 
+interface RespuestaLoteImportacion {
+  importacion_id: string;
+  creadas: number;
+  errores: { fecha?: string; ps?: string; error?: string }[];
+}
+
 type PestanaImportar = "crear" | "conflictos" | "revisar" | "registrado";
 
-function cargarLoteGuardado(): LoteAplicado | null {
+function cargarLoteGuardado(): LoteLocal | null {
   try {
     const texto = localStorage.getItem(CLAVE_LOTE);
     if (!texto) return null;
-    return JSON.parse(texto) as LoteAplicado;
+    const parseado = JSON.parse(texto) as LoteLocal;
+    if (!parseado?.importacion_id) return null;
+    return parseado;
   } catch {
     return null;
   }
 }
 
-function guardarLote(lote: LoteAplicado | null) {
+function guardarLote(lote: LoteLocal | null) {
   try {
-    if (lote && lote.filas.length > 0) {
+    if (lote && lote.importacion_id) {
       localStorage.setItem(CLAVE_LOTE, JSON.stringify(lote));
     } else {
       localStorage.removeItem(CLAVE_LOTE);
     }
   } catch {
-    /* localStorage no disponible: el botón de deshacer simplemente no persiste entre recargas */
+    /* localStorage no disponible: el botón de deshacer no persiste entre recargas */
   }
+}
+
+function claveErrorFila(fecha: string, ps: string) {
+  return `${fecha}__${ps}`;
 }
 
 export default function ImportarHorario({ enModal = false }: { enModal?: boolean }) {
@@ -85,14 +96,13 @@ export default function ImportarHorario({ enModal = false }: { enModal?: boolean
   const [archivosPdf, setArchivosPdf] = useState<File[]>([]);
   const [lecturaPdf, setLecturaPdf] = useState<LecturaHorarioPdf | null>(null);
   const [verLectura, setVerLectura] = useState(false);
-  const [textoJson, setTextoJson] = useState("");
   const [analizando, setAnalizando] = useState(false);
   const [filas, setFilas] = useState<FilaResuelta[] | null>(null);
   const [filasCrudas, setFilasCrudas] = useState<FilaContratoCrudo[] | null>(null);
   const [pestana, setPestana] = useState<PestanaImportar>("crear");
   const [seleccion, setSeleccion] = useState<Set<number>>(new Set());
   const [aplicando, setAplicando] = useState(false);
-  const [loteAplicado, setLoteAplicado] = useState<LoteAplicado | null>(() => cargarLoteGuardado());
+  const [loteAplicado, setLoteAplicado] = useState<LoteLocal | null>(() => cargarLoteGuardado());
   const [ultimoResultado, setUltimoResultado] = useState<ResultadoAplicacion | null>(null);
   const [deshaciendo, setDeshaciendo] = useState(false);
   const [confirmarAplicar, setConfirmarAplicar] = useState(false);
@@ -102,50 +112,28 @@ export default function ImportarHorario({ enModal = false }: { enModal?: boolean
     guardarLote(loteAplicado);
   }, [loteAplicado]);
 
-  function leerArchivoJson(archivo: File) {
-    const lector = new FileReader();
-    lector.onload = () => setTextoJson(String(lector.result ?? ""));
-    lector.readAsText(archivo, "utf-8");
-  }
-
-  /** Lee los PDFs (o, como respaldo, el JSON pegado) y lanza la comparación contra CinemaQ. */
+  /** Lee los PDFs y lanza la comparación contra CinemaQ. */
   async function analizar() {
-    if (archivosPdf.length > 0) {
-      setAnalizando(true);
-      let lectura: LecturaHorarioPdf;
-      try {
-        lectura = await leerHorarioPdf(archivosPdf);
-      } catch (e) {
-        setAnalizando(false);
-        mostrarToast(e instanceof Error ? `No se pudo leer el PDF: ${e.message}` : "No se pudo leer el PDF.", "error");
-        return;
-      }
-      setLecturaPdf(lectura);
-      if (lectura.filas.length === 0) {
-        setAnalizando(false);
-        mostrarToast("No se encontraron filas de horario en el PDF. Revisa los avisos.", "error");
-        return;
-      }
-      await analizarFilas(lectura.filas);
+    if (archivosPdf.length === 0) {
+      mostrarToast("Selecciona al menos un PDF del horario semanal.", "error");
       return;
     }
-
-    let crudo: FilaContratoCrudo[];
-    try {
-      const parseado = JSON.parse(textoJson);
-      if (!Array.isArray(parseado)) throw new Error("El JSON debe ser una lista de filas.");
-      crudo = parseado as FilaContratoCrudo[];
-    } catch (e) {
-      mostrarToast(e instanceof Error ? `JSON inválido: ${e.message}` : "JSON inválido.", "error");
-      return;
-    }
-    if (crudo.length === 0) {
-      mostrarToast("El archivo no tiene filas.", "error");
-      return;
-    }
-    setLecturaPdf(null);
     setAnalizando(true);
-    await analizarFilas(crudo);
+    let lectura: LecturaHorarioPdf;
+    try {
+      lectura = await leerHorarioPdf(archivosPdf);
+    } catch (e) {
+      setAnalizando(false);
+      mostrarToast(e instanceof Error ? `No se pudo leer el PDF: ${e.message}` : "No se pudo leer el PDF.", "error");
+      return;
+    }
+    setLecturaPdf(lectura);
+    if (lectura.filas.length === 0) {
+      setAnalizando(false);
+      mostrarToast("No se encontraron filas de horario en el PDF. Revisa los avisos.", "error");
+      return;
+    }
+    await analizarFilas(lectura.filas);
   }
 
   /** Resuelve las filas crudas contra el estado en vivo de Supabase. Asume `analizando` ya activo. */
@@ -239,101 +227,79 @@ export default function ImportarHorario({ enModal = false }: { enModal?: boolean
     if (!filas || seleccion.size === 0) return;
     setAplicando(true);
     const filasAAplicar = filasCrear.filter(({ i }) => seleccion.has(i)).map(({ f }) => f);
-    const exitosas: FilaLote[] = [];
     const resultadoDetalle: FilaResultadoAplicacion[] = [];
-    let fallidas = 0;
-    const conteoErrores: Record<string, number> = {};
-    const erroresVistos = new Set<string>();
 
-    for (const f of filasAAplicar) {
-      if (!f.empleado_id || !f.area_id) {
-        fallidas += 1;
-        resultadoDetalle.push({ fila: f, resultado: "error", error: "sin empleado o área resueltos" });
-        conteoErrores["sin_id"] = (conteoErrores["sin_id"] ?? 0) + 1;
-        continue;
-      }
-      const paso = "importar";
+    const incompletas = filasAAplicar.filter((f) => !f.empleado_id || !f.area_id);
+    for (const f of incompletas) {
+      resultadoDetalle.push({ fila: f, resultado: "error", error: "sin empleado o área resueltos" });
+    }
+
+    const validas = filasAAplicar.filter((f) => f.empleado_id && f.area_id);
+    let creadas = 0;
+    let fallidas = incompletas.length;
+
+    if (validas.length > 0) {
       try {
-        // Función exclusiva del admin general: usa el área del PDF y no tiene el límite de 7 días.
-        await llamarRpc("importar_horario_asistencia", {
-          p_empleado_id: f.empleado_id,
-          p_fecha: f.fecha,
-          p_area_id: f.area_id,
-        });
-        exitosas.push({
+        const payload = validas.map((f) => ({
           empleado_id: f.empleado_id,
           fecha: f.fecha,
           area_id: f.area_id,
-          nombre_empleado_bd: f.nombre_empleado_bd,
-          asistencia_id: null,
-          creo_horario: !f.ya_tiene_horario,
+          ps: f.ps,
+          nombre: f.nombre_empleado_bd ?? f.nombre_pdf,
+          monto: f.monto_esperado,
+        }));
+
+        const resp = await llamarRpc<RespuestaLoteImportacion>("registrar_lote_importacion", {
+          p_filas: payload,
         });
-        resultadoDetalle.push({ fila: f, resultado: "creado" });
-      } catch (e) {
-        fallidas += 1;
-        const mensaje = e instanceof Error ? e.message : "desconocido";
-        resultadoDetalle.push({ fila: f, resultado: "error", error: `${paso}: ${mensaje}` });
-        const clave = `${paso}|${mensaje}`;
-        conteoErrores[clave] = (conteoErrores[clave] ?? 0) + 1;
-        if (!erroresVistos.has(clave) && erroresVistos.size < 4) {
-          erroresVistos.add(clave);
-          // #region agent log
-          fetch("http://127.0.0.1:7569/ingest/b171d2d0-c768-48c6-b64a-69f48f7d8e0e", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "df313b" }, body: JSON.stringify({ sessionId: "df313b", runId: "pre-fix", hypothesisId: "A-D", location: "ImportarHorario.tsx:aplicarSeleccionadas", message: "RPC de importacion fallo", data: { paso, mensaje, fecha: f.fecha, ya_tiene_horario: f.ya_tiene_horario, area: f.area_cinema }, timestamp: Date.now() }) }).catch(() => {});
-          // #endregion
+
+        const mapaErrores = new Map<string, string>();
+        for (const err of resp.errores ?? []) {
+          mapaErrores.set(claveErrorFila(err.fecha ?? "", err.ps ?? ""), err.error ?? "error desconocido");
         }
+
+        for (const f of validas) {
+          const mensajeError = mapaErrores.get(claveErrorFila(f.fecha, f.ps));
+          if (mensajeError) {
+            fallidas += 1;
+            resultadoDetalle.push({ fila: f, resultado: "error", error: mensajeError });
+          } else {
+            creadas += 1;
+            resultadoDetalle.push({ fila: f, resultado: "creado" });
+          }
+        }
+
+        if (resp.importacion_id && (resp.creadas ?? 0) > 0) {
+          setLoteAplicado({
+            importacion_id: resp.importacion_id,
+            aplicado_en: new Date().toISOString(),
+            filas: resp.creadas,
+          });
+        }
+
+        // Ajuste por si el servidor reportó un conteo distinto al emparejado por PS/fecha.
+        if (typeof resp.creadas === "number") creadas = resp.creadas;
+      } catch (e) {
+        const mensaje = e instanceof Error ? e.message : "desconocido";
+        for (const f of validas) {
+          fallidas += 1;
+          resultadoDetalle.push({ fila: f, resultado: "error", error: mensaje });
+        }
+        creadas = 0;
       }
     }
-
-    // #region agent log
-    fetch("http://127.0.0.1:7569/ingest/b171d2d0-c768-48c6-b64a-69f48f7d8e0e", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "df313b" }, body: JSON.stringify({ sessionId: "df313b", runId: "pre-fix", hypothesisId: "resumen", location: "ImportarHorario.tsx:aplicarSeleccionadas", message: "resumen de aplicacion", data: { intentadas: filasAAplicar.length, exitosas: exitosas.length, fallidas, conteoErrores }, timestamp: Date.now() }) }).catch(() => {});
-    // #endregion
 
     setUltimoResultado({ aplicado_en: new Date().toISOString(), filas: resultadoDetalle });
-
-    // Recuperar los ids de asistencia recién creados, para poder deshacer con precisión.
-    if (exitosas.length > 0) {
-      const idsEmpleados = Array.from(new Set(exitosas.map((e) => e.empleado_id)));
-      const fechas = Array.from(new Set(exitosas.map((e) => e.fecha)));
-      const { data } = await supabase
-        .from("asistencia_diaria")
-        .select("id, empleado_id, fecha")
-        .in("empleado_id", idsEmpleados)
-        .in("fecha", fechas)
-        .eq("eliminado", false);
-      const mapaIds = new Map<string, string>();
-      for (const row of (data as { id: string; empleado_id: string; fecha: string }[]) ?? []) {
-        mapaIds.set(`${row.empleado_id}__${row.fecha}`, row.id);
-      }
-      for (const e of exitosas) {
-        e.asistencia_id = mapaIds.get(`${e.empleado_id}__${e.fecha}`) ?? null;
-      }
-    }
-
-    if (exitosas.length > 0) {
-      const nuevoLote: LoteAplicado = {
-        id: `${Date.now()}`,
-        aplicado_en: new Date().toISOString(),
-        aplicado_por: perfil?.nombre_completo ?? "—",
-        filas: exitosas,
-      };
-      setLoteAplicado(nuevoLote);
-    }
-
     setSeleccion(new Set());
     setAplicando(false);
     setConfirmarAplicar(false);
 
     if (fallidas === 0) {
-      mostrarToast(`${exitosas.length} obligación(es) de cuota creada(s).`, "exito");
+      mostrarToast(`${creadas} obligación(es) de cuota creada(s).`, "exito");
     } else {
-      const primerError = Object.keys(conteoErrores)[0];
-      mostrarToast(
-        `${exitosas.length} creadas; ${fallidas} con error.${primerError ? ` ${primerError}` : ""}`,
-        "info",
-      );
+      mostrarToast(`${creadas} creadas; ${fallidas} con error.`, "info");
     }
 
-    // Re-analiza contra el estado ya actualizado para que las filas creadas pasen a "ya registrado".
     if (filasCrudas) await analizarFilas(filasCrudas);
   }
 
@@ -360,37 +326,52 @@ export default function ImportarHorario({ enModal = false }: { enModal?: boolean
   }
 
   async function deshacerUltimaImportacion() {
-    if (!loteAplicado) return;
+    if (!loteAplicado?.importacion_id) return;
     setDeshaciendo(true);
-    let deshechas = 0;
-    const pendientes: FilaLote[] = [];
 
-    for (const fila of loteAplicado.filas) {
+    const { data, error } = await supabase
+      .from("importaciones_horario_detalle")
+      .select("empleado_id, fecha, area_id, asistencia_id, creo_horario")
+      .eq("importacion_id", loteAplicado.importacion_id);
+
+    if (error) {
+      setDeshaciendo(false);
+      setConfirmarDeshacer(false);
+      mostrarToast(mensajeErrorConsulta(error, "No se pudo leer el detalle del lote para deshacer."), "error");
+      return;
+    }
+
+    const detalles = (data as DetalleLote[]) ?? [];
+    let deshechas = 0;
+    let fallidas = 0;
+
+    for (const fila of detalles) {
       try {
         if (fila.asistencia_id) {
           await llamarRpc<RespuestaRpc>("soft_delete_asistencia", {
             p_asistencia_id: fila.asistencia_id,
-            p_motivo: "Deshecho desde Importar horario (modo prueba, sin comprometer datos reales).",
+            p_motivo: "Deshecho desde Importar horario (última importación de este navegador).",
           });
         }
-        if (fila.creo_horario) {
+        if (fila.creo_horario && fila.empleado_id && fila.fecha) {
           await llamarRpc("quitar_horario", { p_empleado_id: fila.empleado_id, p_fecha: fila.fecha });
         }
         deshechas += 1;
       } catch {
-        pendientes.push(fila);
+        fallidas += 1;
       }
     }
 
-    const loteRestante = pendientes.length > 0 ? { ...loteAplicado, filas: pendientes } : null;
-    setLoteAplicado(loteRestante);
+    if (fallidas === 0) {
+      setLoteAplicado(null);
+    }
     setDeshaciendo(false);
     setConfirmarDeshacer(false);
 
-    if (pendientes.length === 0) {
+    if (fallidas === 0) {
       mostrarToast(`Se deshicieron ${deshechas} registro(s) de la última importación.`, "exito");
     } else {
-      mostrarToast(`Se deshicieron ${deshechas}; ${pendientes.length} no se pudieron revertir. Reintenta.`, "info");
+      mostrarToast(`Se deshicieron ${deshechas}; ${fallidas} no se pudieron revertir. Reintenta.`, "info");
     }
 
     if (filasCrudas) await analizarFilas(filasCrudas);
@@ -402,6 +383,13 @@ export default function ImportarHorario({ enModal = false }: { enModal?: boolean
     { id: "revisar", etiqueta: "Revisar", contador: filasRevisar.length },
     { id: "registrado", etiqueta: "Ya registrado", contador: filasRegistrado.length },
   ];
+
+  const textoArchivos =
+    archivosPdf.length === 0
+      ? "Ningún archivo seleccionado"
+      : archivosPdf.length === 1
+        ? archivosPdf[0].name
+        : `${archivosPdf.length} archivos: ${archivosPdf.map((a) => a.name).join(", ")}`;
 
   return (
     <div>
@@ -434,54 +422,36 @@ export default function ImportarHorario({ enModal = false }: { enModal?: boolean
               type="file"
               accept="application/pdf,.pdf"
               multiple
+              className="input-archivo-oculto"
               onChange={(e) => {
                 setArchivosPdf(Array.from(e.target.files ?? []));
                 setLecturaPdf(null);
               }}
             />
+            <div className="selector-archivo">
+              <button
+                type="button"
+                className="boton boton-secundario"
+                onClick={() => refArchivo.current?.click()}
+              >
+                Elegir PDF
+              </button>
+              <span className="texto-suave selector-archivo__nombre" title={textoArchivos}>
+                {textoArchivos}
+              </span>
+            </div>
             <span className="texto-suave">Puedes elegir varias semanas a la vez.</span>
           </div>
         </div>
         <button
           type="button"
           className="boton boton-primario"
-          disabled={(archivosPdf.length === 0 && !textoJson.trim()) || analizando}
+          disabled={archivosPdf.length === 0 || analizando}
           onClick={analizar}
         >
           <IconoSubir width={16} height={16} /> {analizando ? "Analizando…" : "Analizar"}
         </button>
       </div>
-
-      <details style={{ marginBottom: 12 }}>
-        <summary className="texto-suave" style={{ cursor: "pointer" }}>
-          Avanzado: usar un JSON ya generado
-        </summary>
-        <div className="grupo-filtros" style={{ flexWrap: "wrap", alignItems: "flex-start", marginTop: 8 }}>
-          <div className="campo" style={{ marginBottom: 0, minWidth: 280 }}>
-            <label htmlFor="importar-horario-archivo">Archivo JSON del contrato</label>
-            <input
-              id="importar-horario-archivo"
-              type="file"
-              accept="application/json,.json"
-              onChange={(e) => {
-                const archivo = e.target.files?.[0];
-                if (archivo) leerArchivoJson(archivo);
-              }}
-            />
-          </div>
-          <div className="campo" style={{ marginBottom: 0, minWidth: 280, flex: 1 }}>
-            <label htmlFor="importar-horario-texto">O pega aquí el JSON</label>
-            <textarea
-              id="importar-horario-texto"
-              rows={3}
-              value={textoJson}
-              onChange={(e) => setTextoJson(e.target.value)}
-              placeholder='[{"ps":"012345","nombre_pdf":"...","fecha":"2026-09-01", ...}]'
-            />
-            <span className="texto-suave">Solo se usa si no hay ningún PDF seleccionado.</span>
-          </div>
-        </div>
-      </details>
 
       {lecturaPdf && (
         <div role="status" style={{ marginBottom: 12 }}>
@@ -496,7 +466,7 @@ export default function ImportarHorario({ enModal = false }: { enModal?: boolean
           {lecturaPdf.avisos.length > 0 && (
             <ul className="texto-suave" style={{ margin: "8px 0 0", paddingLeft: 20 }}>
               {lecturaPdf.avisos.map((aviso, i) => (
-                <li key={i}>⚠ {aviso}</li>
+                <li key={i}>{aviso}</li>
               ))}
             </ul>
           )}
@@ -532,18 +502,18 @@ export default function ImportarHorario({ enModal = false }: { enModal?: boolean
         </div>
       )}
 
-      {(ultimoResultado || (loteAplicado && loteAplicado.filas.length > 0)) && (
+      {(ultimoResultado || (loteAplicado && loteAplicado.filas > 0)) && (
         <div className="barra-herramientas" role="status">
           <p className="texto-suave" style={{ margin: 0 }}>
             {ultimoResultado
               ? `Última aplicación: ${ultimoResultado.filas.filter((r) => r.resultado === "creado").length} creada(s), ${ultimoResultado.filas.filter((r) => r.resultado === "error").length} con error — ${formatoFechaHora(ultimoResultado.aplicado_en)}.`
-              : `Última importación aplicada: ${loteAplicado?.filas.length} fila(s), ${formatoFecha(loteAplicado?.aplicado_en.slice(0, 10))}.`}
+              : `Última importación aplicada: ${loteAplicado?.filas} fila(s), ${formatoFecha(loteAplicado?.aplicado_en.slice(0, 10))}.`}
           </p>
           {ultimoResultado && erroresAgrupados.length > 0 && (
             <ul className="texto-suave" style={{ margin: "8px 0 0", paddingLeft: 20, flexBasis: "100%" }}>
               {erroresAgrupados.map(([mensaje, cantidad]) => (
                 <li key={mensaje}>
-                  ⚠ {cantidad} fila(s): {mensaje}
+                  {cantidad} fila(s): {mensaje}
                 </li>
               ))}
             </ul>
@@ -554,15 +524,15 @@ export default function ImportarHorario({ enModal = false }: { enModal?: boolean
                 <IconoDescarga width={16} height={16} /> Exportar CSV
               </button>
             )}
-            {esAdminGeneral && loteAplicado && loteAplicado.filas.length > 0 && (
+            {esAdminGeneral && loteAplicado && loteAplicado.filas > 0 && (
               <button
                 type="button"
                 className="boton boton-peligro"
                 disabled={deshaciendo}
                 onClick={() => setConfirmarDeshacer(true)}
-                title="Solo visible para administrador general: revierte lo creado por esta importación, para poder probar sin comprometer datos reales."
+                title="Solo visible para administrador general: revierte lo creado por esta importación."
               >
-                <IconoDeshacer width={16} height={16} /> {deshaciendo ? "Deshaciendo…" : "Deshacer última importación (pruebas)"}
+                <IconoDeshacer width={16} height={16} /> {deshaciendo ? "Deshaciendo…" : "Deshacer última importación"}
               </button>
             )}
           </div>
@@ -610,26 +580,24 @@ export default function ImportarHorario({ enModal = false }: { enModal?: boolean
                   <EstadoVacio icono={<IconoArchivo width={32} height={32} />} mensaje="No hay filas pendientes por crear." />
                 ) : (
                   <>
-                    {esAdminGeneral && (
-                      <div className="horario-barra-acciones">
-                        <button type="button" className="boton boton-secundario" onClick={alternarTodaSeleccion} disabled={aplicando}>
-                          {seleccion.size === filasCrear.length ? "Quitar selección" : "Seleccionar todas"}
-                        </button>
-                        <button
-                          type="button"
-                          className="boton boton-primario"
-                          disabled={seleccion.size === 0 || aplicando}
-                          onClick={() => setConfirmarAplicar(true)}
-                        >
-                          {aplicando ? "Aplicando…" : `Aplicar seleccionadas (${seleccion.size})`}
-                        </button>
-                      </div>
-                    )}
+                    <div className="horario-barra-acciones">
+                      <button type="button" className="boton boton-secundario" onClick={alternarTodaSeleccion} disabled={aplicando}>
+                        {seleccion.size === filasCrear.length ? "Quitar selección" : "Seleccionar todas"}
+                      </button>
+                      <button
+                        type="button"
+                        className="boton boton-primario"
+                        disabled={seleccion.size === 0 || aplicando}
+                        onClick={() => setConfirmarAplicar(true)}
+                      >
+                        {aplicando ? "Aplicando…" : `Aplicar seleccionadas (${seleccion.size})`}
+                      </button>
+                    </div>
                     <EnvoltorioTabla>
                       <table className="tabla-datos">
                         <thead>
                           <tr>
-                            {esAdminGeneral && <th>Sel.</th>}
+                            <th>Sel.</th>
                             <th>PS</th>
                             <th>Empleado</th>
                             <th>Área</th>
@@ -641,23 +609,21 @@ export default function ImportarHorario({ enModal = false }: { enModal?: boolean
                         <tbody>
                           {filasCrear.map(({ f, i }) => (
                             <tr key={i}>
-                              {esAdminGeneral && (
-                                <td>
-                                  <input
-                                    type="checkbox"
-                                    className="checkbox-fila"
-                                    checked={seleccion.has(i)}
-                                    disabled={aplicando}
-                                    onChange={() => alternarSeleccion(i)}
-                                  />
-                                </td>
-                              )}
+                              <td>
+                                <input
+                                  type="checkbox"
+                                  className="checkbox-fila"
+                                  checked={seleccion.has(i)}
+                                  disabled={aplicando}
+                                  onChange={() => alternarSeleccion(i)}
+                                />
+                              </td>
                               <td className="num-tabular">{f.ps}</td>
                               <td>
                                 {f.nombre_empleado_bd ?? f.nombre_pdf}
                                 {f.advertencia_nombre && (
                                   <span className="texto-suave" title={`En el PDF: ${f.nombre_pdf}`}>
-                                    {" "}⚠ nombre distinto en PDF
+                                    {" "}(nombre distinto en PDF)
                                   </span>
                                 )}
                               </td>
@@ -797,7 +763,7 @@ export default function ImportarHorario({ enModal = false }: { enModal?: boolean
       {confirmarDeshacer && loteAplicado && (
         <ModalConfirmacion
           titulo="Deshacer última importación"
-          mensaje={`Se revertirán ${loteAplicado.filas.length} fila(s) creadas por la última importación (soft-delete de asistencia y baja de horario). No afecta registros hechos a mano antes de esa importación. Pensado para pruebas.`}
+          mensaje={`Se revertirán ${loteAplicado.filas} fila(s) creadas por la última importación de este navegador (soft-delete de asistencia y baja de horario donde se creó). No afecta registros hechos a mano antes de esa importación.`}
           etiquetaBotonConfirmar="Deshacer"
           peligro
           onCancelar={() => setConfirmarDeshacer(false)}
