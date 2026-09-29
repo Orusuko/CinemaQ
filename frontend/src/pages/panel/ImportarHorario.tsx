@@ -252,14 +252,14 @@ export default function ImportarHorario({ enModal = false }: { enModal?: boolean
         conteoErrores["sin_id"] = (conteoErrores["sin_id"] ?? 0) + 1;
         continue;
       }
-      let paso: "horario" | "asistencia" = "horario";
+      const paso = "importar";
       try {
-        if (!f.ya_tiene_horario) {
-          paso = "horario";
-          await llamarRpc("registrar_horario", { p_empleado_id: f.empleado_id, p_fecha: f.fecha });
-        }
-        paso = "asistencia";
-        await llamarRpc("registrar_asistencia", { p_empleado_id: f.empleado_id, p_fecha: f.fecha });
+        // Función exclusiva del admin general: usa el área del PDF y no tiene el límite de 7 días.
+        await llamarRpc("importar_horario_asistencia", {
+          p_empleado_id: f.empleado_id,
+          p_fecha: f.fecha,
+          p_area_id: f.area_id,
+        });
         exitosas.push({
           empleado_id: f.empleado_id,
           fecha: f.fecha,
