@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 import { useArea } from "../../context/AreaContext";
 import { useToast } from "../../context/ToastContext";
@@ -167,8 +167,10 @@ export default function Reportes() {
     () =>
       semanas.map((s) => ({
         ...s,
-        filas: [...s.filas].sort((a, b) =>
-          nombreEmpleado(a.empleadoId).localeCompare(nombreEmpleado(b.empleadoId), "es"),
+        filas: [...s.filas].sort(
+          (a, b) =>
+            nombreArea(a.areaId).localeCompare(nombreArea(b.areaId), "es") ||
+            nombreEmpleado(a.empleadoId).localeCompare(nombreEmpleado(b.empleadoId), "es"),
         ),
       })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -176,10 +178,17 @@ export default function Reportes() {
   );
 
   const faltantes = useMemo(() => {
-    const lista: { clave: string; empleadoId: string; areaId: string; monto: number }[] = [];
+    const lista: { clave: string; semana: string; empleadoId: string; areaId: string; monto: number }[] = [];
     for (const s of semanasOrdenadas) {
       for (const f of s.filas) {
-        if (f.falta > 0) lista.push({ clave: `${s.desde}|${f.empleadoId}`, empleadoId: f.empleadoId, areaId: f.areaId, monto: f.falta });
+        if (f.falta > 0)
+          lista.push({
+            clave: `${s.desde}|${f.empleadoId}`,
+            semana: `${formatoFecha(s.desde)} – ${formatoFecha(s.hasta)}`,
+            empleadoId: f.empleadoId,
+            areaId: f.areaId,
+            monto: f.falta,
+          });
       }
     }
     return lista;
@@ -324,24 +333,55 @@ export default function Reportes() {
                     </tr>
                   </thead>
                   <tbody>
-                    {s.filas.map((f) => (
-                      <tr key={f.empleadoId}>
-                        <td>
-                          {nombreEmpleado(f.empleadoId)}
-                          {numeroEmpleado(f.empleadoId) && (
-                            <span className="texto-suave"> · PS {numeroEmpleado(f.empleadoId)}</span>
+                    {s.filas.map((f, i) => {
+                      // Con varias áreas en la semana, cierra cada área con su subtotal (lo que entrega su responsable).
+                      const variasAreas = new Set(s.filas.map((x) => x.areaId)).size > 1;
+                      const cierraArea = variasAreas && s.filas[i + 1]?.areaId !== f.areaId;
+                      const delArea = cierraArea ? s.filas.filter((x) => x.areaId === f.areaId) : [];
+                      const suma = (campo: "esperado" | "validado" | "falta" | "enRevision") =>
+                        delArea.reduce((acc, x) => acc + x[campo], 0);
+                      return (
+                        <Fragment key={f.empleadoId}>
+                          <tr>
+                            <td>
+                              {nombreEmpleado(f.empleadoId)}
+                              {numeroEmpleado(f.empleadoId) && (
+                                <span className="texto-suave"> · PS {numeroEmpleado(f.empleadoId)}</span>
+                              )}
+                            </td>
+                            <td>
+                              <ChipArea nombre={nombreArea(f.areaId)} />
+                            </td>
+                            <td className="num-tabular">{f.dias}</td>
+                            <td className="num-tabular">{formatoMoneda(f.esperado)}</td>
+                            <td className="num-tabular">{formatoMoneda(f.validado)}</td>
+                            <td className="num-tabular">{formatoMoneda(f.falta)}</td>
+                            <td className="num-tabular">{formatoMoneda(f.enRevision)}</td>
+                          </tr>
+                          {cierraArea && (
+                            <tr>
+                              <td>
+                                <strong>Subtotal {nombreArea(f.areaId)}</strong>
+                              </td>
+                              <td />
+                              <td className="num-tabular">{delArea.reduce((acc, x) => acc + x.dias, 0)}</td>
+                              <td className="num-tabular">
+                                <strong>{formatoMoneda(suma("esperado"))}</strong>
+                              </td>
+                              <td className="num-tabular">
+                                <strong>{formatoMoneda(suma("validado"))}</strong>
+                              </td>
+                              <td className="num-tabular">
+                                <strong>{formatoMoneda(suma("falta"))}</strong>
+                              </td>
+                              <td className="num-tabular">
+                                <strong>{formatoMoneda(suma("enRevision"))}</strong>
+                              </td>
+                            </tr>
                           )}
-                        </td>
-                        <td>
-                          <ChipArea nombre={nombreArea(f.areaId)} />
-                        </td>
-                        <td className="num-tabular">{f.dias}</td>
-                        <td className="num-tabular">{formatoMoneda(f.esperado)}</td>
-                        <td className="num-tabular">{formatoMoneda(f.validado)}</td>
-                        <td className="num-tabular">{formatoMoneda(f.falta)}</td>
-                        <td className="num-tabular">{formatoMoneda(f.enRevision)}</td>
-                      </tr>
-                    ))}
+                        </Fragment>
+                      );
+                    })}
                     <tr>
                       <td>
                         <strong>Total de la semana</strong>
@@ -376,6 +416,7 @@ export default function Reportes() {
                 <table className="tabla-datos">
                   <thead>
                     <tr>
+                      <th>Semana</th>
                       <th>Empleado</th>
                       <th>Área</th>
                       <th>Monto</th>
@@ -384,6 +425,7 @@ export default function Reportes() {
                   <tbody>
                     {faltantes.map((f) => (
                       <tr key={f.clave}>
+                        <td>{f.semana}</td>
                         <td>{nombreEmpleado(f.empleadoId)}</td>
                         <td>
                           <ChipArea nombre={nombreArea(f.areaId)} />
