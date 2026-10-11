@@ -82,20 +82,36 @@ export default function Reportes() {
     let cancelado = false;
     async function cargar() {
       setCargando(true);
-      let q = supabase
-        .from("pagos_cuota")
-        .select("*, empleados(numero_empleado, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido)")
-        .gte("fecha", desde)
-        .lte("fecha", hasta);
-      if (areaIdsFiltro) q = q.in("area_id", areaIdsFiltro);
-      if (empleadoId) q = q.eq("empleado_id", empleadoId);
-      const { data, error } = await q;
-      if (cancelado) return;
-      if (error) {
-        mostrarToast(mensajeErrorConsulta(error, "No se pudo cargar el reporte."), "error");
+      // PostgREST limita ~1000 filas por respuesta: se pagina para no subestimar montos.
+      const TAMANO_PAGINA = 1000;
+      const acumulado: PagoCuota[] = [];
+      let fallo: { message?: string } | null = null;
+      for (let inicio = 0; ; inicio += TAMANO_PAGINA) {
+        let q = supabase
+          .from("pagos_cuota")
+          .select("*, empleados(numero_empleado, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido)")
+          .gte("fecha", desde)
+          .lte("fecha", hasta)
+          .order("fecha", { ascending: true })
+          .order("id", { ascending: true })
+          .range(inicio, inicio + TAMANO_PAGINA - 1);
+        if (areaIdsFiltro) q = q.in("area_id", areaIdsFiltro);
+        if (empleadoId) q = q.eq("empleado_id", empleadoId);
+        const { data, error } = await q;
+        if (cancelado) return;
+        if (error) {
+          fallo = error;
+          break;
+        }
+        const pagina = (data as PagoCuota[]) ?? [];
+        acumulado.push(...pagina);
+        if (pagina.length < TAMANO_PAGINA) break;
+      }
+      if (fallo) {
+        mostrarToast(mensajeErrorConsulta(fallo, "No se pudo cargar el reporte."), "error");
         setPagos([]);
       } else {
-        setPagos((data as PagoCuota[]) ?? []);
+        setPagos(acumulado);
       }
       setCargando(false);
     }
