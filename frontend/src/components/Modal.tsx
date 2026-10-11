@@ -6,9 +6,10 @@ interface ModalProps {
   children: ReactNode;
   ancho?: boolean;
   extraAncho?: boolean;
+  cerrarAlFondo?: boolean;
 }
 
-export default function Modal({ titulo, onCerrar, children, ancho, extraAncho }: ModalProps) {
+export default function Modal({ titulo, onCerrar, children, ancho, extraAncho, cerrarAlFondo = true }: ModalProps) {
   const tituloId = useId();
   const refModal = useRef<HTMLDivElement>(null);
   const refFocoPrevio = useRef<Element | null>(null);
@@ -67,7 +68,7 @@ export default function Modal({ titulo, onCerrar, children, ancho, extraAncho }:
   }
 
   return (
-    <div className="fondo-modal" onClick={onCerrar}>
+    <div className="fondo-modal" onClick={cerrarAlFondo ? onCerrar : undefined}>
       <div
         ref={refModal}
         className={clases}

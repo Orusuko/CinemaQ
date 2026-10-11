@@ -91,6 +91,9 @@ button {
   border-radius: var(--radio);
   padding: 0.6rem 1.1rem;
   font-weight: 600;
+  font-family: inherit;
+  font-size: 0.95rem;
+  cursor: pointer;
   transition: background-color var(--transicion), border-color var(--transicion), color var(--transicion), opacity var(--transicion);
   white-space: nowrap;
 }

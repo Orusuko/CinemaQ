@@ -50,8 +50,9 @@ export async function extraerItemsPdf(pdfjs: PdfjsLike, datos: ArrayBuffer): Pro
 }
 
 async function cargarPdfjs(): Promise<Pdfjs> {
-  const pdfjs = await import("pdfjs-dist");
-  const worker = await import("pdfjs-dist/build/pdf.worker.min.mjs?url");
+  // La build moderna no arranca en navegadores de teléfono (sin URL.parse ni Promise.withResolvers).
+  const pdfjs = (await import("pdfjs-dist/legacy/build/pdf.mjs")) as unknown as Pdfjs;
+  const worker = await import("pdfjs-dist/legacy/build/pdf.worker.min.mjs?url");
   pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
   return pdfjs;
 }

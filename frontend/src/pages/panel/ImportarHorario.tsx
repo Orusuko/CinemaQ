@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
@@ -92,7 +92,6 @@ export default function ImportarHorario({ enModal = false }: { enModal?: boolean
   const { mostrarToast } = useToast();
   const esAdminGeneral = perfil?.rol === "administrador_general";
 
-  const refArchivo = useRef<HTMLInputElement>(null);
   const [archivosPdf, setArchivosPdf] = useState<File[]>([]);
   const [lecturaPdf, setLecturaPdf] = useState<LecturaHorarioPdf | null>(null);
   const [verLectura, setVerLectura] = useState(false);
@@ -418,7 +417,6 @@ export default function ImportarHorario({ enModal = false }: { enModal?: boolean
             <label htmlFor="importar-horario-pdf">PDF(s) del horario semanal</label>
             <input
               id="importar-horario-pdf"
-              ref={refArchivo}
               type="file"
               accept="application/pdf,.pdf"
               multiple
@@ -429,13 +427,9 @@ export default function ImportarHorario({ enModal = false }: { enModal?: boolean
               }}
             />
             <div className="selector-archivo">
-              <button
-                type="button"
-                className="boton boton-secundario"
-                onClick={() => refArchivo.current?.click()}
-              >
+              <label htmlFor="importar-horario-pdf" className="boton boton-secundario">
                 Elegir PDF
-              </button>
+              </label>
               <span className="texto-suave selector-archivo__nombre" title={textoArchivos}>
                 {textoArchivos}
               </span>

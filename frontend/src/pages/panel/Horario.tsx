@@ -504,7 +504,7 @@ export default function Horario() {
       </Tabs>
 
       {modalImportar && (
-        <Modal titulo="Importar desde PDF" extraAncho onCerrar={() => setModalImportar(false)}>
+        <Modal titulo="Importar desde PDF" extraAncho cerrarAlFondo={false} onCerrar={() => setModalImportar(false)}>
           <ImportarHorario enModal />
         </Modal>
       )}
