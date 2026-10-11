@@ -175,6 +175,9 @@ function ContenidoPanel() {
             <NavLink to="/panel/pagos" className={claseNav} onClick={cerrarMenu}>
               <IconoBillete /> Pagos
             </NavLink>
+            <NavLink to="/panel/reportes" className={claseNav} onClick={cerrarMenu}>
+              <IconoArchivo /> Reportes
+            </NavLink>
           </GrupoNav>
 
           <GrupoNav titulo="Personal">

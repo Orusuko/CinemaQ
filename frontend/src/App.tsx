@@ -7,6 +7,7 @@ import Dashboard from "./pages/panel/Dashboard";
 import Horario from "./pages/panel/Horario";
 import Asistencia from "./pages/panel/Asistencia";
 import Pagos from "./pages/panel/Pagos";
+import Reportes from "./pages/panel/Reportes";
 import Empleados from "./pages/panel/Empleados";
 import Solicitudes from "./pages/panel/Solicitudes";
 import Usuarios from "./pages/panel/Usuarios";
@@ -57,6 +58,7 @@ export default function App() {
         <Route path="horario" element={<Horario />} />
         <Route path="asistencia" element={<Asistencia />} />
         <Route path="pagos" element={<Pagos />} />
+        <Route path="reportes" element={<Reportes />} />
         <Route path="empleados" element={<Empleados />} />
         <Route path="solicitudes" element={<Solicitudes />} />
         <Route
