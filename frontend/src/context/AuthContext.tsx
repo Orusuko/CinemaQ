@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { usuarioAEmailInterno } from "../lib/authUsuario";
 import { supabase, supabaseConfigurado } from "../lib/supabaseClient";
@@ -19,6 +19,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [sesion, setSesion] = useState<Session | null>(null);
   const [perfil, setPerfil] = useState<Perfil | null>(null);
   const [cargando, setCargando] = useState(true);
+  const usuarioIdRef = useRef<string | null>(null);
 
   async function cargarPerfil(userId: string): Promise<Perfil | null> {
     const { data } = await supabase.from("perfiles").select("*").eq("id", userId).single();
@@ -28,6 +29,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function sincronizarSesion(session: Session | null) {
+    usuarioIdRef.current = session?.user?.id ?? null;
     setSesion(session);
     if (session?.user?.id) {
       await cargarPerfil(session.user.id);
@@ -43,6 +45,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // setTimeout evita deadlock documentado de Supabase al llamar la API dentro del callback.
     const { data: suscripcion } = supabase.auth.onAuthStateChange((_evento, nuevaSesion) => {
       if (!montado) return;
+      // Refresco de token / regreso a la pestaña con el mismo usuario: actualizar la sesión sin
+      // activar `cargando`, porque RutaProtegida desmontaría el panel y se perderían filtros y datos.
+      if (nuevaSesion && nuevaSesion.user.id === usuarioIdRef.current) {
+        setSesion(nuevaSesion);
+        return;
+      }
       setCargando(true);
       setTimeout(() => {
         if (!montado) return;

@@ -7,6 +7,11 @@ import { useToast } from "../../context/ToastContext";
 import { llamarRpc } from "../../lib/rpc";
 import { fechaHoyInputCdmx, formatoFecha, formatoFechaHora, formatoMoneda, nombreCompletoEmpleado, ETIQUETAS_ESTADO_PAGO, claseEstadoPago, ordenarRangoFechas } from "../../lib/formato";
 import { mensajeErrorConsulta, esFechaIsoValida } from "../../lib/consulta";
+import { moverPeriodo, periodoDe } from "../../lib/periodosPago";
+import { totalesPorEstado } from "../../lib/reporteCuotas";
+import { cargarPagosRango } from "../../lib/consultaPagos";
+import { usePersistente } from "../../lib/usePersistente";
+import ResumenEstados from "../../components/ResumenEstados";
 import ModalConfirmacion from "../../components/ModalConfirmacion";
 import Modal from "../../components/Modal";
 import EnvoltorioTabla from "../../components/EnvoltorioTabla";
@@ -135,8 +140,20 @@ export default function Pagos() {
   const { mostrarToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const [desde, setDesde] = useState(fechaHoyInputCdmx());
-  const [hasta, setHasta] = useState(fechaHoyInputCdmx());
+  // Filtros persistentes: al salir y volver a Pagos se conservan.
+  const [tipoPeriodo, setTipoPeriodo] = usePersistente<"semanal" | "catorcenal" | "rango">("pagos.periodo", "semanal");
+  const [fechaRef, setFechaRef] = usePersistente("pagos.fechaRef", fechaHoyInputCdmx());
+  const [desde, setDesde] = usePersistente("pagos.desde", fechaHoyInputCdmx());
+  const [hasta, setHasta] = usePersistente("pagos.hasta", fechaHoyInputCdmx());
+  const [empleadoId, setEmpleadoId] = usePersistente("pagos.empleado", "");
+  const tipo = tipoPeriodo === "catorcenal" || tipoPeriodo === "rango" ? tipoPeriodo : "semanal";
+  const rango = useMemo(
+    () =>
+      tipo === "rango"
+        ? ordenarRangoFechas(desde, hasta)
+        : periodoDe(tipo, esFechaIsoValida(fechaRef) ? fechaRef : fechaHoyInputCdmx()),
+    [tipo, desde, hasta, fechaRef],
+  );
   const [pagos, setPagos] = useState<PagoCuota[]>([]);
   const [cargando, setCargando] = useState(true);
   const [procesandoId, setProcesandoId] = useState<string | null>(null);
@@ -144,7 +161,7 @@ export default function Pagos() {
   const [aRechazar, setARechazar] = useState<PagoCuota | null>(null);
   const [aEliminar, setAEliminar] = useState<PagoCuota | null>(null);
   const [mostrarManual, setMostrarManual] = useState(false);
-  const [pestana, setPestana] = useState<"revision" | "validados">("revision");
+  const [pestana, setPestana] = usePersistente<"revision" | "validados">("pagos.pestana", "revision");
   const pagoResaltadoUrl = searchParams.get("pago");
   const [pagoResaltado, setPagoResaltado] = useState<string | null>(pagoResaltadoUrl);
 
@@ -157,20 +174,12 @@ export default function Pagos() {
 
   async function cargar() {
     setCargando(true);
-    const rango = ordenarRangoFechas(desde, hasta);
-    let consulta = supabase
-      .from("pagos_cuota")
-      .select("*, empleados(numero_empleado, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido)")
-      .gte("fecha", rango.desde)
-      .lte("fecha", rango.hasta)
-      .order("fecha", { ascending: false });
-    if (areaIdsFiltro) consulta = consulta.in("area_id", areaIdsFiltro);
-    const { data, error } = await consulta;
+    const { pagos: lista, error } = await cargarPagosRango(rango.desde, rango.hasta, areaIdsFiltro);
     if (error) {
       mostrarToast(mensajeErrorConsulta(error, "No se pudieron cargar los pagos."), "error");
       setPagos([]);
     } else {
-      setPagos((data as PagoCuota[]) ?? []);
+      setPagos(lista);
     }
     setCargando(false);
   }
@@ -178,7 +187,7 @@ export default function Pagos() {
   useEffect(() => {
     cargar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [desde, hasta, areaIdsFiltro]);
+  }, [rango.desde, rango.hasta, areaIdsFiltro]);
 
   useEffect(() => {
     const pestanaUrl = searchParams.get("pestana");
@@ -188,9 +197,10 @@ export default function Pagos() {
     const desdeUrl = searchParams.get("desde");
     const hastaUrl = searchParams.get("hasta");
     if (esFechaIsoValida(desdeUrl) && esFechaIsoValida(hastaUrl)) {
-      const rango = ordenarRangoFechas(desdeUrl, hastaUrl);
-      setDesde(rango.desde);
-      setHasta(rango.hasta);
+      const rangoUrl = ordenarRangoFechas(desdeUrl, hastaUrl);
+      setDesde(rangoUrl.desde);
+      setHasta(rangoUrl.hasta);
+      setTipoPeriodo("rango");
     }
   }, [searchParams]);
 
@@ -208,6 +218,7 @@ export default function Pagos() {
       if (!esFechaIsoValida(searchParams.get("desde")) || !esFechaIsoValida(searchParams.get("hasta"))) {
         setDesde(data.fecha);
         setHasta(data.fecha);
+        setTipoPeriodo("rango");
       }
       if (searchParams.get("pestana") !== "revision" && searchParams.get("pestana") !== "validados") {
         setPestana(data.estado === "validado" ? "validados" : "revision");
@@ -227,11 +238,28 @@ export default function Pagos() {
     }
   }, [pagoResaltadoUrl, cargando, pagos, pestana]);
 
-  const enRevisionYPendientes = useMemo(
-    () => pagos.filter((p) => p.estado === "pendiente" || p.estado === "marcado_pendiente_validacion"),
-    [pagos],
+  // Empleados presentes en el periodo cargado; el filtro se aplica en cliente (sin nueva consulta).
+  const opcionesEmpleado = useMemo(() => {
+    const mapa = new Map<string, { nombre: string; numero: string }>();
+    for (const p of pagos) {
+      if (p.empleados && !mapa.has(p.empleado_id)) {
+        mapa.set(p.empleado_id, { nombre: nombreCompletoEmpleado(p.empleados), numero: p.empleados.numero_empleado });
+      }
+    }
+    return [...mapa].sort((a, b) => a[1].nombre.localeCompare(b[1].nombre, "es"));
+  }, [pagos]);
+  const empleadoActivo = opcionesEmpleado.some(([id]) => id === empleadoId) ? empleadoId : "";
+  const pagosVisibles = useMemo(
+    () => (empleadoActivo ? pagos.filter((p) => p.empleado_id === empleadoActivo) : pagos),
+    [pagos, empleadoActivo],
   );
-  const validados = useMemo(() => pagos.filter((p) => p.estado === "validado"), [pagos]);
+  const totales = useMemo(() => totalesPorEstado(pagosVisibles), [pagosVisibles]);
+
+  const enRevisionYPendientes = useMemo(
+    () => pagosVisibles.filter((p) => p.estado === "pendiente" || p.estado === "marcado_pendiente_validacion"),
+    [pagosVisibles],
+  );
+  const validados = useMemo(() => pagosVisibles.filter((p) => p.estado === "validado"), [pagosVisibles]);
 
   function nombreArea(areaId: string) {
     return areas.find((a) => a.id === areaId)?.nombre ?? "—";
@@ -291,6 +319,16 @@ export default function Pagos() {
     return p.empleados ? nombreCompletoEmpleado(p.empleados) : "—";
   }
 
+  // El límite también va a la URL (deep links); si no, el efecto de searchParams lo revertiría.
+  function cambiarLimite(campo: "desde" | "hasta", valor: string) {
+    (campo === "desde" ? setDesde : setHasta)(valor);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set(campo, valor);
+      return next;
+    }, { replace: true });
+  }
+
   const pestanasConfig = [
     { id: "revision", etiqueta: "Pendientes y en revisión", contador: enRevisionYPendientes.length },
     { id: "validados", etiqueta: "Validados", contador: validados.length },
@@ -302,36 +340,81 @@ export default function Pagos() {
         <h2>Pagos</h2>
         <div className="grupo-filtros">
           <div className="campo" style={{ marginBottom: 0 }}>
-            <label htmlFor="pagos-filtro-desde">Desde</label>
-            <input
-              id="pagos-filtro-desde"
-              type="date"
-              value={desde}
+            <label htmlFor="pagos-periodo">Periodo</label>
+            <select
+              id="pagos-periodo"
+              value={tipo}
               onChange={(e) => {
-              const valor = e.target.value;
-              setDesde(valor);
-              setSearchParams((prev) => {
-                const next = new URLSearchParams(prev);
-                next.set("desde", valor);
-                return next;
-              }, { replace: true });
-            }} />
+                const nuevo = e.target.value as "semanal" | "catorcenal" | "rango";
+                if (nuevo === "rango") {
+                  setDesde(rango.desde);
+                  setHasta(rango.hasta);
+                } else {
+                  setFechaRef(rango.desde);
+                }
+                setTipoPeriodo(nuevo);
+                // Quita desde/hasta de la URL para que no fuercen de nuevo el modo "rango".
+                setSearchParams((prev) => {
+                  const next = new URLSearchParams(prev);
+                  next.delete("desde");
+                  next.delete("hasta");
+                  return next;
+                }, { replace: true });
+              }}
+            >
+              <option value="semanal">Semanal (jueves a miércoles)</option>
+              <option value="catorcenal">Catorcenal (2 semanas)</option>
+              <option value="rango">Desde / hasta</option>
+            </select>
           </div>
+          {tipo === "rango" ? (
+            <>
+              <div className="campo" style={{ marginBottom: 0 }}>
+                <label htmlFor="pagos-filtro-desde">Desde</label>
+                <input id="pagos-filtro-desde" type="date" value={desde} onChange={(e) => cambiarLimite("desde", e.target.value)} />
+              </div>
+              <div className="campo" style={{ marginBottom: 0 }}>
+                <label htmlFor="pagos-filtro-hasta">Hasta</label>
+                <input id="pagos-filtro-hasta" type="date" value={hasta} onChange={(e) => cambiarLimite("hasta", e.target.value)} />
+              </div>
+            </>
+          ) : (
+            <div className="periodo-nav">
+              <button
+                type="button"
+                className="boton boton-secundario boton-chico"
+                aria-label="Periodo anterior"
+                onClick={() => setFechaRef(moverPeriodo(tipo, rango.desde, -1))}
+              >
+                ‹
+              </button>
+              <div className="campo" style={{ marginBottom: 0 }}>
+                <label htmlFor="pagos-fecha-ref">{tipo === "semanal" ? "Semana" : "Catorcena"} que contiene</label>
+                <input id="pagos-fecha-ref" type="date" value={fechaRef} onChange={(e) => setFechaRef(e.target.value)} />
+              </div>
+              <button
+                type="button"
+                className="boton boton-secundario boton-chico"
+                aria-label="Periodo siguiente"
+                onClick={() => setFechaRef(moverPeriodo(tipo, rango.desde, 1))}
+              >
+                ›
+              </button>
+              <button type="button" className="boton boton-secundario boton-chico" onClick={() => setFechaRef(fechaHoyInputCdmx())}>
+                Hoy
+              </button>
+            </div>
+          )}
           <div className="campo" style={{ marginBottom: 0 }}>
-            <label htmlFor="pagos-filtro-hasta">Hasta</label>
-            <input
-              id="pagos-filtro-hasta"
-              type="date"
-              value={hasta}
-              onChange={(e) => {
-              const valor = e.target.value;
-              setHasta(valor);
-              setSearchParams((prev) => {
-                const next = new URLSearchParams(prev);
-                next.set("hasta", valor);
-                return next;
-              }, { replace: true });
-            }} />
+            <label htmlFor="pagos-empleado">Empleado</label>
+            <select id="pagos-empleado" value={empleadoActivo} onChange={(e) => setEmpleadoId(e.target.value)}>
+              <option value="">Todos</option>
+              {opcionesEmpleado.map(([id, info]) => (
+                <option key={id} value={id}>
+                  {info.numero} · {info.nombre}
+                </option>
+              ))}
+            </select>
           </div>
           {!esSupervision && (
             <button className="boton boton-acento" onClick={() => setMostrarManual(true)}>
@@ -340,6 +423,11 @@ export default function Pagos() {
           )}
         </div>
       </div>
+
+      <p className="periodo-rango">
+        Del {formatoFecha(rango.desde)} al {formatoFecha(rango.hasta)}
+      </p>
+      {!cargando && <ResumenEstados validado={totales.validado} enRevision={totales.enRevision} falta={totales.falta} />}
 
       <Tabs pestanas={pestanasConfig} activa={pestana} onChange={(id) => {
         setPestana(id as "revision" | "validados");

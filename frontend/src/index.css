@@ -16,6 +16,8 @@
   --color-advertencia-fondo: #fef3c7;
   --color-peligro: #b91c1c;
   --color-peligro-fondo: #fee2e2;
+  --color-revision: #0369a1;
+  --color-revision-fondo: #e0f2fe;
   --color-neutral-fondo: #e2e8f0;
   --color-neutral-texto: #334155;
   --radio-sm: 8px;
@@ -413,6 +415,43 @@ button {
   font-variant-numeric: tabular-nums;
   font-family: "Fira Code", monospace;
 }
+
+/* Montos por significado: verde validado, azul en revisión (ya recaudado), rojo falta. */
+.monto-validado { color: var(--color-exito); font-weight: 600; }
+.monto-revision { color: var(--color-revision); font-weight: 600; }
+.monto-falta { color: var(--color-peligro); font-weight: 600; }
+.monto-cero { color: var(--color-texto-suave); opacity: 0.45; }
+
+.tarjeta-kpi.kpi-validado { border-left: 3px solid var(--color-exito); }
+.tarjeta-kpi.kpi-revision { border-left: 3px solid var(--color-revision); }
+.tarjeta-kpi.kpi-falta { border-left: 3px solid var(--color-peligro); }
+.kpi-validado .valor-kpi { color: var(--color-exito); }
+.kpi-revision .valor-kpi { color: var(--color-revision); }
+.kpi-falta .valor-kpi { color: var(--color-peligro); }
+
+.tabla-datos th.th-validado { box-shadow: inset 0 -3px 0 var(--color-exito); }
+.tabla-datos th.th-revision { box-shadow: inset 0 -3px 0 var(--color-revision); }
+.tabla-datos th.th-falta { box-shadow: inset 0 -3px 0 var(--color-peligro); }
+.tabla-datos tr.fila-subtotal td { background: var(--color-fondo); }
+.tabla-datos tr.fila-total td { background: var(--color-neutral-fondo); border-top: 2px solid var(--color-borde); }
+
+.resumen-estados { display: flex; flex-direction: column; gap: 0.5rem; margin: 0 0 0.75rem; }
+.resumen-estados__barra {
+  display: flex;
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--color-neutral-fondo);
+}
+.resumen-estados__seg--validado { background: var(--color-exito); }
+.resumen-estados__seg--revision { background: var(--color-revision); }
+.resumen-estados__seg--falta { background: var(--color-peligro); }
+.resumen-estados__leyenda { display: flex; flex-wrap: wrap; gap: 0.25rem 1.25rem; font-size: 0.88rem; color: var(--color-texto-suave); }
+.resumen-estados__item { display: inline-flex; align-items: center; gap: 0.4rem; }
+.resumen-estados__punto { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 8px; }
+
+.periodo-nav { display: inline-flex; align-items: flex-end; gap: 0.35rem; }
+.periodo-rango { margin: 0 0 0.5rem; font-size: 0.9rem; color: var(--color-texto-suave); }
 
 .cabecera-pagina h2 {
   margin: 0 0 0.15rem;

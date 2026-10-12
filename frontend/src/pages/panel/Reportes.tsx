@@ -11,26 +11,32 @@ import {
 } from "../../lib/formato";
 import { mensajeErrorConsulta, esFechaIsoValida } from "../../lib/consulta";
 import { agruparReporte, semanaDe } from "../../lib/reporteCuotas";
+import { periodoDe } from "../../lib/periodosPago";
+import { cargarPagosRango } from "../../lib/consultaPagos";
+import { usePersistente } from "../../lib/usePersistente";
 import { descargarCsv, filaCsv } from "../../lib/csv";
 import EnvoltorioTabla from "../../components/EnvoltorioTabla";
 import ChipArea from "../../components/ChipArea";
+import Monto from "../../components/Monto";
+import ResumenEstados from "../../components/ResumenEstados";
 import EstadoVacio from "../../components/EstadoVacio";
 import SkeletonTabla from "../../components/SkeletonTabla";
 import { IconoCheck, IconoLista } from "../../components/Iconos";
 import type { Empleado, PagoCuota } from "../../lib/tipos";
 
-type ModoRango = "semana" | "dia" | "rango";
+type ModoRango = "semana" | "catorcena" | "dia" | "rango";
 
 export default function Reportes() {
   const { areaIdsFiltro, areas } = useArea();
   const { mostrarToast } = useToast();
 
-  const [modo, setModo] = useState<ModoRango>("semana");
-  const [fechaSemana, setFechaSemana] = useState(fechaHoyInputCdmx());
-  const [fechaDia, setFechaDia] = useState(fechaHoyInputCdmx());
-  const [desdeRango, setDesdeRango] = useState(fechaHoyInputCdmx());
-  const [hastaRango, setHastaRango] = useState(fechaHoyInputCdmx());
-  const [empleadoId, setEmpleadoId] = useState("");
+  // Filtros persistentes: al salir y volver a Reportes se conservan.
+  const [modo, setModo] = usePersistente<ModoRango>("reportes.modo", "semana");
+  const [fechaSemana, setFechaSemana] = usePersistente("reportes.fechaSemana", fechaHoyInputCdmx());
+  const [fechaDia, setFechaDia] = usePersistente("reportes.fechaDia", fechaHoyInputCdmx());
+  const [desdeRango, setDesdeRango] = usePersistente("reportes.desde", fechaHoyInputCdmx());
+  const [hastaRango, setHastaRango] = usePersistente("reportes.hasta", fechaHoyInputCdmx());
+  const [empleadoId, setEmpleadoId] = usePersistente("reportes.empleado", "");
   const [empleados, setEmpleados] = useState<Empleado[]>([]);
   const [pagos, setPagos] = useState<PagoCuota[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -38,6 +44,9 @@ export default function Reportes() {
   const rango = useMemo(() => {
     if (modo === "semana") {
       return esFechaIsoValida(fechaSemana) ? semanaDe(fechaSemana) : null;
+    }
+    if (modo === "catorcena") {
+      return esFechaIsoValida(fechaSemana) ? periodoDe("catorcenal", fechaSemana) : null;
     }
     if (modo === "dia") {
       return esFechaIsoValida(fechaDia) ? { desde: fechaDia, hasta: fechaDia } : null;
@@ -80,38 +89,16 @@ export default function Reportes() {
       return;
     }
     let cancelado = false;
+    const [d, h] = [desde, hasta];
     async function cargar() {
       setCargando(true);
-      // PostgREST limita ~1000 filas por respuesta: se pagina para no subestimar montos.
-      const TAMANO_PAGINA = 1000;
-      const acumulado: PagoCuota[] = [];
-      let fallo: { message?: string } | null = null;
-      for (let inicio = 0; ; inicio += TAMANO_PAGINA) {
-        let q = supabase
-          .from("pagos_cuota")
-          .select("*, empleados(numero_empleado, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido)")
-          .gte("fecha", desde)
-          .lte("fecha", hasta)
-          .order("fecha", { ascending: true })
-          .order("id", { ascending: true })
-          .range(inicio, inicio + TAMANO_PAGINA - 1);
-        if (areaIdsFiltro) q = q.in("area_id", areaIdsFiltro);
-        if (empleadoId) q = q.eq("empleado_id", empleadoId);
-        const { data, error } = await q;
-        if (cancelado) return;
-        if (error) {
-          fallo = error;
-          break;
-        }
-        const pagina = (data as PagoCuota[]) ?? [];
-        acumulado.push(...pagina);
-        if (pagina.length < TAMANO_PAGINA) break;
-      }
-      if (fallo) {
-        mostrarToast(mensajeErrorConsulta(fallo, "No se pudo cargar el reporte."), "error");
+      const { pagos: lista, error } = await cargarPagosRango(d, h, areaIdsFiltro, empleadoId || undefined);
+      if (cancelado) return;
+      if (error) {
+        mostrarToast(mensajeErrorConsulta(error, "No se pudo cargar el reporte."), "error");
         setPagos([]);
       } else {
-        setPagos(acumulado);
+        setPagos(lista);
       }
       setCargando(false);
     }
@@ -232,13 +219,14 @@ export default function Reportes() {
             <label htmlFor="reportes-modo">Rango</label>
             <select id="reportes-modo" value={modo} onChange={(e) => setModo(e.target.value as ModoRango)}>
               <option value="semana">Semana (jueves a miércoles)</option>
+              <option value="catorcena">Catorcena (2 semanas)</option>
               <option value="dia">Un día</option>
               <option value="rango">Desde / hasta</option>
             </select>
           </div>
-          {modo === "semana" && (
+          {(modo === "semana" || modo === "catorcena") && (
             <div className="campo" style={{ marginBottom: 0 }}>
-              <label htmlFor="reportes-fecha-semana">Semana que contiene</label>
+              <label htmlFor="reportes-fecha-semana">{modo === "semana" ? "Semana" : "Catorcena"} que contiene</label>
               <input
                 id="reportes-fecha-semana"
                 type="date"
@@ -287,19 +275,17 @@ export default function Reportes() {
           <div className="etiqueta-kpi">Debería cobrarse</div>
           <div className="valor-kpi">{formatoMoneda(totales.esperado)}</div>
         </div>
-        <div className="tarjeta tarjeta-kpi">
+        <div className="tarjeta tarjeta-kpi kpi-validado">
           <div className="etiqueta-kpi">Validado</div>
           <div className="valor-kpi">{formatoMoneda(totales.validado)}</div>
         </div>
-        <div className="tarjeta tarjeta-kpi">
+        <div className="tarjeta tarjeta-kpi kpi-revision">
+          <div className="etiqueta-kpi">En revisión</div>
+          <div className="valor-kpi">{formatoMoneda(totales.enRevision)}</div>
+        </div>
+        <div className="tarjeta tarjeta-kpi kpi-falta">
           <div className="etiqueta-kpi">Falta</div>
           <div className="valor-kpi">{formatoMoneda(totales.falta)}</div>
-        </div>
-        <div className="tarjeta tarjeta-kpi tarjeta-kpi--en-revision">
-          <div className="etiqueta-kpi">En revisión</div>
-          <div className="valor-kpi" style={{ color: "var(--color-advertencia)" }}>
-            {formatoMoneda(totales.enRevision)}
-          </div>
         </div>
       </div>
 
@@ -319,6 +305,7 @@ export default function Reportes() {
               <h3>
                 {formatoFecha(s.desde)} – {formatoFecha(s.hasta)}
               </h3>
+              <ResumenEstados validado={s.validado} enRevision={s.enRevision} falta={s.falta} />
               <EnvoltorioTabla>
                 <table className="tabla-datos">
                   <thead>
@@ -327,9 +314,9 @@ export default function Reportes() {
                       <th>Área</th>
                       <th>Días</th>
                       <th>Debería</th>
-                      <th>Validado</th>
-                      <th>Falta</th>
-                      <th>En revisión</th>
+                      <th className="th-validado">Validado</th>
+                      <th className="th-falta">Falta</th>
+                      <th className="th-revision">En revisión</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -352,37 +339,43 @@ export default function Reportes() {
                             <td>
                               <ChipArea nombre={nombreArea(f.areaId)} />
                             </td>
-                            <td className="num-tabular">{f.dias}</td>
+                            <td className="num-tabular texto-suave">{f.dias}</td>
                             <td className="num-tabular">{formatoMoneda(f.esperado)}</td>
-                            <td className="num-tabular">{formatoMoneda(f.validado)}</td>
-                            <td className="num-tabular">{formatoMoneda(f.falta)}</td>
-                            <td className="num-tabular">{formatoMoneda(f.enRevision)}</td>
+                            <td>
+                              <Monto valor={f.validado} tipo="validado" />
+                            </td>
+                            <td>
+                              <Monto valor={f.falta} tipo="falta" />
+                            </td>
+                            <td>
+                              <Monto valor={f.enRevision} tipo="revision" />
+                            </td>
                           </tr>
                           {cierraArea && (
-                            <tr>
+                            <tr className="fila-subtotal">
                               <td>
                                 <strong>Subtotal {nombreArea(f.areaId)}</strong>
                               </td>
                               <td />
-                              <td className="num-tabular">{delArea.reduce((acc, x) => acc + x.dias, 0)}</td>
+                              <td className="num-tabular texto-suave">{delArea.reduce((acc, x) => acc + x.dias, 0)}</td>
                               <td className="num-tabular">
                                 <strong>{formatoMoneda(suma("esperado"))}</strong>
                               </td>
-                              <td className="num-tabular">
-                                <strong>{formatoMoneda(suma("validado"))}</strong>
+                              <td>
+                                <Monto valor={suma("validado")} tipo="validado" />
                               </td>
-                              <td className="num-tabular">
-                                <strong>{formatoMoneda(suma("falta"))}</strong>
+                              <td>
+                                <Monto valor={suma("falta")} tipo="falta" />
                               </td>
-                              <td className="num-tabular">
-                                <strong>{formatoMoneda(suma("enRevision"))}</strong>
+                              <td>
+                                <Monto valor={suma("enRevision")} tipo="revision" />
                               </td>
                             </tr>
                           )}
                         </Fragment>
                       );
                     })}
-                    <tr>
+                    <tr className="fila-total">
                       <td>
                         <strong>Total de la semana</strong>
                       </td>
@@ -391,14 +384,14 @@ export default function Reportes() {
                       <td className="num-tabular">
                         <strong>{formatoMoneda(s.esperado)}</strong>
                       </td>
-                      <td className="num-tabular">
-                        <strong>{formatoMoneda(s.validado)}</strong>
+                      <td>
+                        <Monto valor={s.validado} tipo="validado" />
                       </td>
-                      <td className="num-tabular">
-                        <strong>{formatoMoneda(s.falta)}</strong>
+                      <td>
+                        <Monto valor={s.falta} tipo="falta" />
                       </td>
-                      <td className="num-tabular">
-                        <strong>{formatoMoneda(s.enRevision)}</strong>
+                      <td>
+                        <Monto valor={s.enRevision} tipo="revision" />
                       </td>
                     </tr>
                   </tbody>
@@ -425,12 +418,14 @@ export default function Reportes() {
                   <tbody>
                     {faltantes.map((f) => (
                       <tr key={f.clave}>
-                        <td>{f.semana}</td>
+                        <td className="texto-suave">{f.semana}</td>
                         <td>{nombreEmpleado(f.empleadoId)}</td>
                         <td>
                           <ChipArea nombre={nombreArea(f.areaId)} />
                         </td>
-                        <td className="num-tabular">{formatoMoneda(f.monto)}</td>
+                        <td>
+                          <Monto valor={f.monto} tipo="falta" />
+                        </td>
                       </tr>
                     ))}
                   </tbody>

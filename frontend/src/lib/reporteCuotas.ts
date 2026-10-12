@@ -2,14 +2,14 @@ import type { PagoCuota } from "./tipos";
 
 /** Semana operativa jueves-miércoles (UTC, sin correr el día en México). */
 
-const MS_DIA = 24 * 60 * 60 * 1000;
+export const MS_DIA = 24 * 60 * 60 * 1000;
 
-function aUtc(fechaIso: string): number {
+export function aUtc(fechaIso: string): number {
   const [a, m, d] = fechaIso.split("-").map(Number);
   return Date.UTC(a, m - 1, d);
 }
 
-function deUtc(ms: number): string {
+export function deUtc(ms: number): string {
   const f = new Date(ms);
   const a = String(f.getUTCFullYear()).padStart(4, "0");
   const m = String(f.getUTCMonth() + 1).padStart(2, "0");
@@ -23,6 +23,18 @@ export function semanaDe(fechaIso: string): { desde: string; hasta: string } {
   const retroceso = (dia - 4 + 7) % 7;
   const desdeMs = ms - retroceso * MS_DIA;
   return { desde: deUtc(desdeMs), hasta: deUtc(desdeMs + 6 * MS_DIA) };
+}
+
+/** Suma por estado; los cancelados no cuentan. */
+export function totalesPorEstado(pagos: PagoCuota[]): { validado: number; enRevision: number; falta: number } {
+  const t = { validado: 0, enRevision: 0, falta: 0 };
+  for (const p of pagos) {
+    const monto = Number(p.monto_esperado) || 0;
+    if (p.estado === "validado") t.validado += monto;
+    else if (p.estado === "marcado_pendiente_validacion") t.enRevision += monto;
+    else if (p.estado === "pendiente") t.falta += monto;
+  }
+  return t;
 }
 
 export interface FilaEmpleadoReporte {
