@@ -451,6 +451,9 @@ button {
 .resumen-estados__punto { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 8px; }
 
 .periodo-nav { display: inline-flex; align-items: flex-end; gap: 0.35rem; }
+.periodo-numero-fila { display: flex; align-items: center; gap: 0.4rem; }
+.periodo-numero { width: 4.2rem; text-align: center; font-weight: 600; }
+.periodo-anio, .periodo-semanas { color: var(--color-texto-suave); font-size: 0.9rem; white-space: nowrap; }
 .periodo-rango { margin: 0 0 0.5rem; font-size: 0.9rem; color: var(--color-texto-suave); }
 
 .cabecera-pagina h2 {
@@ -2106,6 +2109,20 @@ table.tabla-datos tbody tr:hover {
 
   .grupo-filtros .boton {
     width: 100%;
+  }
+
+  .periodo-nav {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .periodo-nav .boton,
+  .periodo-nav .campo {
+    width: auto;
+  }
+
+  .periodo-semanas {
+    flex-basis: 100%;
   }
 
   .fila-acciones {

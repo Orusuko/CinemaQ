@@ -4,14 +4,13 @@ import { useArea } from "../../context/AreaContext";
 import { useToast } from "../../context/ToastContext";
 import {
   fechaHoyInputCdmx,
-  formatoFecha,
   formatoMoneda,
   nombreCompletoEmpleado,
   ordenarRangoFechas,
 } from "../../lib/formato";
 import { mensajeErrorConsulta, esFechaIsoValida } from "../../lib/consulta";
 import { agruparReporte, semanaDe } from "../../lib/reporteCuotas";
-import { periodoDe } from "../../lib/periodosPago";
+import { catorcenaNumerada, periodoDe, semanaNumerada } from "../../lib/periodosPago";
 import { cargarPagosRango } from "../../lib/consultaPagos";
 import { usePersistente } from "../../lib/usePersistente";
 import { descargarCsv, filaCsv } from "../../lib/csv";
@@ -19,6 +18,7 @@ import EnvoltorioTabla from "../../components/EnvoltorioTabla";
 import ChipArea from "../../components/ChipArea";
 import Monto from "../../components/Monto";
 import ResumenEstados from "../../components/ResumenEstados";
+import SelectorNumeroPeriodo from "../../components/SelectorNumeroPeriodo";
 import EstadoVacio from "../../components/EstadoVacio";
 import SkeletonTabla from "../../components/SkeletonTabla";
 import { IconoCheck, IconoLista } from "../../components/Iconos";
@@ -171,7 +171,7 @@ export default function Reportes() {
         if (f.falta > 0)
           lista.push({
             clave: `${s.desde}|${f.empleadoId}`,
-            semana: `${formatoFecha(s.desde)} – ${formatoFecha(s.hasta)}`,
+            semana: String(semanaNumerada(s.desde).numero),
             empleadoId: f.empleadoId,
             areaId: f.areaId,
             monto: f.falta,
@@ -225,15 +225,12 @@ export default function Reportes() {
             </select>
           </div>
           {(modo === "semana" || modo === "catorcena") && (
-            <div className="campo" style={{ marginBottom: 0 }}>
-              <label htmlFor="reportes-fecha-semana">{modo === "semana" ? "Semana" : "Catorcena"} que contiene</label>
-              <input
-                id="reportes-fecha-semana"
-                type="date"
-                value={fechaSemana}
-                onChange={(e) => setFechaSemana(e.target.value)}
-              />
-            </div>
+            <SelectorNumeroPeriodo
+              id="reportes-fecha-semana"
+              tipo={modo === "semana" ? "semanal" : "catorcenal"}
+              fecha={fechaSemana}
+              onCambiarFecha={setFechaSemana}
+            />
           )}
           {modo === "dia" && (
             <div className="campo" style={{ marginBottom: 0 }}>
@@ -300,11 +297,12 @@ export default function Reportes() {
         />
       ) : (
         <>
+          {modo === "catorcena" && (
+            <h3>Catorcena {catorcenaNumerada(rango.desde).numero}</h3>
+          )}
           {semanasOrdenadas.map((s) => (
             <section key={s.desde} style={{ marginBottom: "1.5rem" }}>
-              <h3>
-                {formatoFecha(s.desde)} – {formatoFecha(s.hasta)}
-              </h3>
+              <h3>Semana {semanaNumerada(s.desde).numero}</h3>
               <ResumenEstados validado={s.validado} enRevision={s.enRevision} falta={s.falta} />
               <EnvoltorioTabla>
                 <table className="tabla-datos">

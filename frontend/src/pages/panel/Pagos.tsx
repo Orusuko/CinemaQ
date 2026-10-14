@@ -7,11 +7,12 @@ import { useToast } from "../../context/ToastContext";
 import { llamarRpc } from "../../lib/rpc";
 import { fechaHoyInputCdmx, formatoFecha, formatoFechaHora, formatoMoneda, nombreCompletoEmpleado, ETIQUETAS_ESTADO_PAGO, claseEstadoPago, ordenarRangoFechas } from "../../lib/formato";
 import { mensajeErrorConsulta, esFechaIsoValida } from "../../lib/consulta";
-import { moverPeriodo, periodoDe } from "../../lib/periodosPago";
+import { catorcenaNumerada, periodoDe, semanaNumerada } from "../../lib/periodosPago";
 import { totalesPorEstado } from "../../lib/reporteCuotas";
 import { cargarPagosRango } from "../../lib/consultaPagos";
 import { usePersistente } from "../../lib/usePersistente";
 import ResumenEstados from "../../components/ResumenEstados";
+import SelectorNumeroPeriodo from "../../components/SelectorNumeroPeriodo";
 import ModalConfirmacion from "../../components/ModalConfirmacion";
 import Modal from "../../components/Modal";
 import EnvoltorioTabla from "../../components/EnvoltorioTabla";
@@ -329,6 +330,13 @@ export default function Pagos() {
     }, { replace: true });
   }
 
+  const cat = tipo === "catorcenal" ? catorcenaNumerada(rango.desde) : null;
+  const rotuloPeriodo = cat
+    ? `Catorcena ${cat.numero} · semanas ${cat.semanaDesde} y ${cat.semanaHasta}`
+    : tipo === "semanal"
+      ? `Semana ${semanaNumerada(rango.desde).numero}`
+      : `Del ${formatoFecha(rango.desde)} al ${formatoFecha(rango.hasta)}`;
+
   const pestanasConfig = [
     { id: "revision", etiqueta: "Pendientes y en revisión", contador: enRevisionYPendientes.length },
     { id: "validados", etiqueta: "Validados", contador: validados.length },
@@ -379,31 +387,7 @@ export default function Pagos() {
               </div>
             </>
           ) : (
-            <div className="periodo-nav">
-              <button
-                type="button"
-                className="boton boton-secundario boton-chico"
-                aria-label="Periodo anterior"
-                onClick={() => setFechaRef(moverPeriodo(tipo, rango.desde, -1))}
-              >
-                ‹
-              </button>
-              <div className="campo" style={{ marginBottom: 0 }}>
-                <label htmlFor="pagos-fecha-ref">{tipo === "semanal" ? "Semana" : "Catorcena"} que contiene</label>
-                <input id="pagos-fecha-ref" type="date" value={fechaRef} onChange={(e) => setFechaRef(e.target.value)} />
-              </div>
-              <button
-                type="button"
-                className="boton boton-secundario boton-chico"
-                aria-label="Periodo siguiente"
-                onClick={() => setFechaRef(moverPeriodo(tipo, rango.desde, 1))}
-              >
-                ›
-              </button>
-              <button type="button" className="boton boton-secundario boton-chico" onClick={() => setFechaRef(fechaHoyInputCdmx())}>
-                Hoy
-              </button>
-            </div>
+            <SelectorNumeroPeriodo id="pagos-fecha-ref" tipo={tipo} fecha={fechaRef} onCambiarFecha={setFechaRef} />
           )}
           <div className="campo" style={{ marginBottom: 0 }}>
             <label htmlFor="pagos-empleado">Empleado</label>
@@ -424,9 +408,7 @@ export default function Pagos() {
         </div>
       </div>
 
-      <p className="periodo-rango">
-        Del {formatoFecha(rango.desde)} al {formatoFecha(rango.hasta)}
-      </p>
+      <p className="periodo-rango">{rotuloPeriodo}</p>
       {!cargando && <ResumenEstados validado={totales.validado} enRevision={totales.enRevision} falta={totales.falta} />}
 
       <Tabs pestanas={pestanasConfig} activa={pestana} onChange={(id) => {
