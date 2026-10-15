@@ -1,4 +1,4 @@
-import { expect, it, vi } from "vitest";
+﻿import { expect, it, vi } from "vitest";
 import ExcelJS from "exceljs";
 
 const descargas: { nombre: string; blob: Blob }[] = [];
@@ -10,12 +10,13 @@ it("genera una hoja por area con huecos, totales y configuracion de impresion", 
   const ok = await descargarExcelAsistencia("r.xlsx", [
     {
       nombre: "Comanderos",
+      periodo: "Semana 34",
       titulo: "Cuotas Comanderos",
       dias: ["2026-09-10", "2026-09-11", "2026-09-12"],
       filas: [{ nombre: "Pedro", montos: [21, null, 21] }],
       totales: [21, null, 21],
     },
-    { nombre: "Corredores", titulo: "Cuotas Corredores", dias: ["2026-09-10"], filas: [], totales: [null] },
+    { nombre: "Corredores", periodo: "Semana 34", titulo: "Cuotas Corredores", dias: ["2026-09-10"], filas: [], totales: [null] },
   ]);
   expect(ok).toBe(true);
   expect(descargas[0].nombre).toBe("r.xlsx");
@@ -25,12 +26,15 @@ it("genera una hoja por area con huecos, totales y configuracion de impresion", 
   expect(libro.worksheets.map((h) => h.name)).toEqual(["Comanderos", "Corredores"]);
 
   const hoja = libro.getWorksheet("Comanderos")!;
-  expect(hoja.getRow(2).values).toEqual([undefined, "Empleado", "10/09/26", "11/09/26", "12/09/26", "Total"]);
-  expect(hoja.getRow(3).getCell(2).value).toBe(21);
-  expect(hoja.getRow(3).getCell(3).value).toBeNull();
-  expect(hoja.getRow(3).getCell(5).value).toBe(42);
-  expect(hoja.getRow(4).getCell(1).value).toBe("Total");
+  expect(hoja.getRow(3).values).toEqual([undefined, "Empleado", "10/09/26", "11/09/26", "12/09/26", "Total"]);
+  expect(hoja.getRow(4).getCell(2).value).toBe(21);
+  expect(hoja.getRow(4).getCell(3).value).toBeNull();
   expect(hoja.getRow(4).getCell(5).value).toBe(42);
+  expect(hoja.getRow(5).getCell(1).value).toBe("Total");
+  expect(hoja.getRow(5).getCell(5).value).toBe(42);
+  expect(hoja.getCell(1, 1).value).toBe("Semana 34");
+  expect(hoja.getCell(2, 1).value).toBe("Cuotas Comanderos");
   expect(hoja.pageSetup.orientation).toBe("landscape");
   expect(hoja.pageSetup.fitToWidth).toBe(1);
 });
+

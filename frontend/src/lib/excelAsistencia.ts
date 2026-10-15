@@ -2,12 +2,14 @@ import { descargarBlob } from "./csv";
 
 export interface HojaAsistencia {
   nombre: string;
+  periodo: string; // "Catorcena 17", "Semana 34", "Día 10/09/2026"…
   titulo: string;
   dias: string[]; // YYYY-MM-DD
   filas: { nombre: string; montos: (number | null)[] }[];
   totales: (number | null)[];
 }
 
+const FILA_ENCABEZADO = 3;
 const FORMATO_MONTO = '"$"#,##0';
 const BORDE = { style: "thin" as const, color: { argb: "FF9CA3AF" } };
 
@@ -33,16 +35,19 @@ export async function descargarExcelAsistencia(nombreArchivo: string, hojas: Hoj
       hoja.getColumn(1).width = 36;
       for (let c = 2; c <= columnas; c++) hoja.getColumn(c).width = 11;
 
-      hoja.mergeCells(1, 1, 1, columnas);
-      hoja.getCell(1, 1).value = h.titulo;
-      hoja.getCell(1, 1).font = { bold: true, size: 14 };
-      hoja.getRow(1).height = 24;
+      // Fila 1: catorcena/semana/día (para ubicar la hoja impresa); fila 2: área y fechas; fila 3: encabezado.
+      [h.periodo, h.titulo].forEach((texto, i) => {
+        hoja.mergeCells(i + 1, 1, i + 1, columnas);
+        hoja.getCell(i + 1, 1).value = texto;
+        hoja.getCell(i + 1, 1).font = { bold: true, size: i === 0 ? 18 : 12 };
+        hoja.getRow(i + 1).height = i === 0 ? 28 : 20;
+      });
 
       const fechas = h.dias.map((d) => `${d.slice(8)}/${d.slice(5, 7)}/${d.slice(2, 4)}`);
       hoja.addRow(["Empleado", ...fechas, "Total"]);
-      hoja.getRow(2).font = { bold: true };
-      hoja.getRow(2).alignment = { horizontal: "center" };
-      hoja.getRow(2).eachCell((c) => {
+      hoja.getRow(FILA_ENCABEZADO).font = { bold: true };
+      hoja.getRow(FILA_ENCABEZADO).alignment = { horizontal: "center" };
+      hoja.getRow(FILA_ENCABEZADO).eachCell((c) => {
         c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE5E7EB" } };
       });
 
@@ -52,16 +57,16 @@ export async function descargarExcelAsistencia(nombreArchivo: string, hojas: Hoj
       total.font = { bold: true };
 
       hoja.eachRow((fila, n) => {
-        if (n === 1) return;
+        if (n < FILA_ENCABEZADO) return;
         fila.eachCell({ includeEmpty: true }, (c, col) => {
           c.border = { top: BORDE, bottom: BORDE, left: BORDE, right: BORDE };
-          if (col > 1 && n > 2) {
+          if (col > 1 && n > FILA_ENCABEZADO) {
             c.numFmt = FORMATO_MONTO;
             c.alignment = { horizontal: "right" };
           }
         });
       });
-      hoja.pageSetup.printTitlesRow = "1:2"; // el encabezado se repite en cada página
+      hoja.pageSetup.printTitlesRow = `1:${FILA_ENCABEZADO}`; // se repite en cada página impresa
     }
 
     const datos = await libro.xlsx.writeBuffer();

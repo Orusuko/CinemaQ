@@ -186,10 +186,19 @@ export default function Reportes() {
     if (!desde || !hasta) return;
     // Lista de asistencia para imprimir: una hoja por área, un día por columna.
     const { dias, areas: bloques } = listaAsistencia(pagos, desde, hasta);
+    const periodo =
+      modo === "catorcena"
+        ? `Catorcena ${catorcenaNumerada(desde).numero}`
+        : modo === "semana"
+          ? `Semana ${semanaNumerada(desde).numero}`
+          : modo === "dia"
+            ? `Día ${formatoFecha(desde)}`
+            : `Del ${formatoFecha(desde)} al ${formatoFecha(hasta)}`;
     const hojas = [...bloques]
       .sort((x, y) => nombreArea(x.areaId).localeCompare(nombreArea(y.areaId), "es"))
       .map((b) => ({
         nombre: nombreArea(b.areaId),
+        periodo,
         titulo: `Cuotas ${nombreArea(b.areaId)} · ${formatoFecha(desde)} al ${formatoFecha(hasta)}`,
         dias,
         filas: b.filas
