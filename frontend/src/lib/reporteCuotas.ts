@@ -37,6 +37,46 @@ export function totalesPorEstado(pagos: PagoCuota[]): { validado: number; enRevi
   return t;
 }
 
+export interface ListaAsistenciaArea {
+  areaId: string;
+  filas: { empleadoId: string; montos: (number | null)[] }[];
+  totales: (number | null)[];
+}
+
+/** Monto por día (null = sin cuota) de cada empleado, separado por área; los cancelados no cuentan. */
+export function listaAsistencia(
+  pagos: PagoCuota[],
+  desde: string,
+  hasta: string,
+): { dias: string[]; areas: ListaAsistenciaArea[] } {
+  const dias: string[] = [];
+  for (let ms = aUtc(desde); ms <= aUtc(hasta); ms += MS_DIA) dias.push(deUtc(ms));
+  const columna = new Map(dias.map((d, i) => [d, i]));
+
+  const areas = new Map<string, ListaAsistenciaArea>();
+  const filas = new Map<string, ListaAsistenciaArea["filas"][number]>();
+  for (const p of pagos) {
+    const i = columna.get(p.fecha);
+    if (p.estado === "cancelado" || i === undefined) continue;
+    let area = areas.get(p.area_id);
+    if (!area) {
+      area = { areaId: p.area_id, filas: [], totales: dias.map(() => null) };
+      areas.set(p.area_id, area);
+    }
+    const clave = `${p.area_id}|${p.empleado_id}`;
+    let fila = filas.get(clave);
+    if (!fila) {
+      fila = { empleadoId: p.empleado_id, montos: dias.map(() => null) };
+      filas.set(clave, fila);
+      area.filas.push(fila);
+    }
+    const monto = Number(p.monto_esperado) || 0;
+    fila.montos[i] = (fila.montos[i] ?? 0) + monto;
+    area.totales[i] = (area.totales[i] ?? 0) + monto;
+  }
+  return { dias, areas: [...areas.values()] };
+}
+
 export interface FilaEmpleadoReporte {
   empleadoId: string;
   areaId: string;

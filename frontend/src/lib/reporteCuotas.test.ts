@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { agruparReporte, semanaDe } from "./reporteCuotas";
+import { agruparReporte, listaAsistencia, semanaDe } from "./reporteCuotas";
 import type { PagoCuota } from "./tipos";
 
 const pago = (parcial: Pick<PagoCuota, "empleado_id" | "area_id" | "fecha" | "monto_esperado" | "estado">): PagoCuota =>
@@ -28,5 +28,29 @@ describe("agruparReporte", () => {
     const primera = semanas[1].filas[0];
     expect(primera).toMatchObject({ empleadoId: "a", dias: 3, esperado: 30, validado: 10, falta: 10, enRevision: 10 });
     expect(semanas[1]).toMatchObject({ esperado: 30, validado: 10, falta: 10, enRevision: 10 });
+  });
+});
+
+describe("listaAsistencia", () => {
+  it("separa por area, deja huecos sin cuota, suma el total y omite cancelado", () => {
+    const { dias, areas } = listaAsistencia(
+      [
+        pago({ empleado_id: "a", area_id: "com", fecha: "2026-09-10", monto_esperado: 21, estado: "validado" }),
+        pago({ empleado_id: "a", area_id: "com", fecha: "2026-09-12", monto_esperado: 21, estado: "pendiente" }),
+        pago({ empleado_id: "b", area_id: "com", fecha: "2026-09-10", monto_esperado: 21, estado: "pendiente" }),
+        pago({ empleado_id: "b", area_id: "com", fecha: "2026-09-11", monto_esperado: 21, estado: "cancelado" }),
+        pago({ empleado_id: "a", area_id: "cor", fecha: "2026-09-11", monto_esperado: 10, estado: "pendiente" }),
+        pago({ empleado_id: "a", area_id: "cor", fecha: "2026-09-20", monto_esperado: 10, estado: "pendiente" }),
+      ],
+      "2026-09-10",
+      "2026-09-12",
+    );
+    expect(dias).toEqual(["2026-09-10", "2026-09-11", "2026-09-12"]);
+    const com = areas.find((a) => a.areaId === "com")!;
+    expect(com.filas.find((f) => f.empleadoId === "a")!.montos).toEqual([21, null, 21]);
+    expect(com.totales).toEqual([42, null, 21]);
+    const cor = areas.find((a) => a.areaId === "cor")!;
+    expect(cor.filas).toHaveLength(1);
+    expect(cor.totales).toEqual([null, 10, null]);
   });
 });

@@ -9,7 +9,7 @@ import {
   ordenarRangoFechas,
 } from "../../lib/formato";
 import { mensajeErrorConsulta, esFechaIsoValida } from "../../lib/consulta";
-import { agruparReporte, semanaDe } from "../../lib/reporteCuotas";
+import { agruparReporte, listaAsistencia, semanaDe } from "../../lib/reporteCuotas";
 import { catorcenaNumerada, periodoDe, semanaNumerada } from "../../lib/periodosPago";
 import { cargarPagosRango } from "../../lib/consultaPagos";
 import { usePersistente } from "../../lib/usePersistente";
@@ -183,26 +183,18 @@ export default function Reportes() {
 
   function descargar() {
     if (!desde || !hasta) return;
-    const lineas = [
-      filaCsv(["Semana desde", "Semana hasta", "PS", "Empleado", "Área", "Días", "Debería", "Validado", "Falta", "En revisión"]),
-    ];
-    for (const s of semanasOrdenadas) {
-      for (const f of s.filas) {
-        lineas.push(
-          filaCsv([
-            s.desde,
-            s.hasta,
-            numeroEmpleado(f.empleadoId),
-            nombreEmpleado(f.empleadoId),
-            nombreArea(f.areaId),
-            f.dias,
-            f.esperado.toFixed(2),
-            f.validado.toFixed(2),
-            f.falta.toFixed(2),
-            f.enRevision.toFixed(2),
-          ]),
-        );
+    // Lista de asistencia para imprimir: un bloque por área, un día por columna.
+    const { dias, areas: bloques } = listaAsistencia(pagos, desde, hasta);
+    const encabezado = ["Empleado", ...dias.map((d) => `${d.slice(8)}/${d.slice(5, 7)}/${d.slice(2, 4)}`)];
+    const celdas = (montos: (number | null)[]) => montos.map((m) => (m === null ? "" : m));
+    const lineas: string[] = [];
+    for (const b of [...bloques].sort((x, y) => nombreArea(x.areaId).localeCompare(nombreArea(y.areaId), "es"))) {
+      if (lineas.length > 0) lineas.push("");
+      lineas.push(filaCsv([nombreArea(b.areaId)]), filaCsv(encabezado));
+      for (const f of [...b.filas].sort((x, y) => nombreEmpleado(x.empleadoId).localeCompare(nombreEmpleado(y.empleadoId), "es"))) {
+        lineas.push(filaCsv([nombreEmpleado(f.empleadoId), ...celdas(f.montos)]));
       }
+      lineas.push(filaCsv(["Total", ...celdas(b.totales)]));
     }
     const nombre = desde === hasta ? `reporte_cuotas_${desde}.csv` : `reporte_cuotas_${desde}_${hasta}.csv`;
     if (!descargarCsv(nombre, lineas)) {
