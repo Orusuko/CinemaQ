@@ -4,6 +4,7 @@ import { useArea } from "../../context/AreaContext";
 import { useToast } from "../../context/ToastContext";
 import {
   fechaHoyInputCdmx,
+  formatoFecha,
   formatoMoneda,
   nombreCompletoEmpleado,
   ordenarRangoFechas,
@@ -13,7 +14,7 @@ import { agruparReporte, listaAsistencia, semanaDe } from "../../lib/reporteCuot
 import { catorcenaNumerada, periodoDe, semanaNumerada } from "../../lib/periodosPago";
 import { cargarPagosRango } from "../../lib/consultaPagos";
 import { usePersistente } from "../../lib/usePersistente";
-import { descargarCsv, filaCsv } from "../../lib/csv";
+import { descargarExcelAsistencia } from "../../lib/excelAsistencia";
 import EnvoltorioTabla from "../../components/EnvoltorioTabla";
 import ChipArea from "../../components/ChipArea";
 import Monto from "../../components/Monto";
@@ -181,24 +182,24 @@ export default function Reportes() {
     return lista;
   }, [semanasOrdenadas]);
 
-  function descargar() {
+  async function descargar() {
     if (!desde || !hasta) return;
-    // Lista de asistencia para imprimir: un bloque por área, un día por columna.
+    // Lista de asistencia para imprimir: una hoja por área, un día por columna.
     const { dias, areas: bloques } = listaAsistencia(pagos, desde, hasta);
-    const encabezado = ["Empleado", ...dias.map((d) => `${d.slice(8)}/${d.slice(5, 7)}/${d.slice(2, 4)}`)];
-    const celdas = (montos: (number | null)[]) => montos.map((m) => (m === null ? "" : m));
-    const lineas: string[] = [];
-    for (const b of [...bloques].sort((x, y) => nombreArea(x.areaId).localeCompare(nombreArea(y.areaId), "es"))) {
-      if (lineas.length > 0) lineas.push("");
-      lineas.push(filaCsv([nombreArea(b.areaId)]), filaCsv(encabezado));
-      for (const f of [...b.filas].sort((x, y) => nombreEmpleado(x.empleadoId).localeCompare(nombreEmpleado(y.empleadoId), "es"))) {
-        lineas.push(filaCsv([nombreEmpleado(f.empleadoId), ...celdas(f.montos)]));
-      }
-      lineas.push(filaCsv(["Total", ...celdas(b.totales)]));
-    }
-    const nombre = desde === hasta ? `reporte_cuotas_${desde}.csv` : `reporte_cuotas_${desde}_${hasta}.csv`;
-    if (!descargarCsv(nombre, lineas)) {
-      mostrarToast("No se pudo generar el CSV.", "error");
+    const hojas = [...bloques]
+      .sort((x, y) => nombreArea(x.areaId).localeCompare(nombreArea(y.areaId), "es"))
+      .map((b) => ({
+        nombre: nombreArea(b.areaId),
+        titulo: `Cuotas ${nombreArea(b.areaId)} · ${formatoFecha(desde)} al ${formatoFecha(hasta)}`,
+        dias,
+        filas: b.filas
+          .map((f) => ({ nombre: nombreEmpleado(f.empleadoId), montos: f.montos }))
+          .sort((x, y) => x.nombre.localeCompare(y.nombre, "es")),
+        totales: b.totales,
+      }));
+    const nombre = desde === hasta ? `reporte_cuotas_${desde}.xlsx` : `reporte_cuotas_${desde}_${hasta}.xlsx`;
+    if (!(await descargarExcelAsistencia(nombre, hojas))) {
+      mostrarToast("No se pudo generar el Excel.", "error");
     }
   }
 
@@ -254,7 +255,7 @@ export default function Reportes() {
             </select>
           </div>
           <button className="boton boton-secundario" onClick={descargar} disabled={cargando || semanas.length === 0}>
-            Descargar CSV
+            Descargar Excel
           </button>
         </div>
       </div>
